@@ -105,24 +105,29 @@ impl<'a> ConstructContextPatchExt for ConstructContext<'a> {
 mod test {
     use super::*;
 
-    #[derive(Default, Clone, Component)]
+    #[derive(Clone, Component)]
     struct Player {
+        _name: String,
+    }
+
+    #[derive(Default, Clone)]
+    struct PlayerProps {
         name: String,
     }
 
     impl Construct for Player {
-        type Props = Player;
+        type Props = PlayerProps;
         fn construct(
             _context: &mut ConstructContext,
             props: Self::Props,
         ) -> Result<Self, ConstructError> {
-            Ok(props)
+            Ok(Player { _name: props.name })
         }
     }
 
     #[test]
     fn test_patch_name() {
-        let mut player = Player {
+        let mut player = PlayerProps {
             name: "shane".into(),
         };
         assert_eq!(player.name, "shane");
