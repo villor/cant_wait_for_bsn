@@ -1,4 +1,7 @@
-use bevy::{prelude::BuildChildren, utils::all_tuples};
+use bevy::{
+    prelude::{BuildChildren, Entity, EntityCommand, EntityCommands, World},
+    utils::all_tuples,
+};
 
 use crate::{ConstructContext, ConstructContextPatchExt, ConstructError, Patch};
 
@@ -82,5 +85,46 @@ impl<'a> ConstructContextEntityPatchExt for ConstructContext<'a> {
         entity_patch.children.spawn(self)?;
 
         Ok(self)
+    }
+}
+
+/// Extension trait implementing [`EntityPatch`] utilities for [`EntityCommands`].
+pub trait EntityCommandsEntityPatchExt {
+    /// Constructs an [`EntityPatch`] and applies it to the entity.
+    fn construct_patch<P, C>(
+        &mut self,
+        entity_patch: impl Into<EntityPatch<P, C>>,
+    ) -> EntityCommands
+    where
+        P: Patch + Send + 'static,
+        C: EntityPatchChildren + Send + 'static;
+}
+
+struct ConstructEntityPatchCommand<P, C>(EntityPatch<P, C>)
+where
+    P: Patch + Send + 'static,
+    C: EntityPatchChildren + Send + 'static;
+
+impl<P, C> EntityCommand for ConstructEntityPatchCommand<P, C>
+where
+    P: Patch + Send + 'static,
+    C: EntityPatchChildren + Send + 'static,
+{
+    fn apply(self, id: Entity, world: &mut World) {
+        let mut context = ConstructContext { id, world };
+        context
+            .spawn_entity_patch(self.0)
+            .expect("TODO failed to spawn_entity_patch in ConstructEntityPatchCommand");
+    }
+}
+
+impl<'w> EntityCommandsEntityPatchExt for EntityCommands<'w> {
+    // type Out = EntityCommands;
+    fn construct_patch<P: Patch + Send + 'static, C: EntityPatchChildren + Send + 'static>(
+        &mut self,
+        entity_patch: impl Into<EntityPatch<P, C>>,
+    ) -> EntityCommands {
+        self.queue(ConstructEntityPatchCommand(entity_patch.into()));
+        self.reborrow()
     }
 }

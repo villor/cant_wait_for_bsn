@@ -50,8 +50,10 @@ fn setup(mut commands: Commands) {
             ..default()
         })
         .with_children(|parent| {
-            parent.construct::<HealthBar>(HealthBarProps {
-                player_entity: ConstructProp::Prop(player1.into()),
+            parent.spawn_empty().construct_patch(bsn! {
+                HealthBar {
+                    player_entity: ConstructProp::Prop(player1.into()),
+                }
             });
         });
 }
