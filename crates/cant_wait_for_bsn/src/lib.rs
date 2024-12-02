@@ -12,3 +12,5 @@ mod patch;
 pub use construct::*;
 pub use entity_patch::*;
 pub use patch::*;
+
+pub use cant_wait_for_bsn_macros::bsn;
