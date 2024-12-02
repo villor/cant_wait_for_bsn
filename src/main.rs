@@ -160,8 +160,8 @@ impl Construct for HealthBar {
 
         let width = 250.0f32;
         let border = 3.0f32;
-        let border_radius = Val::Px(10.0f32);
-        let border_radius2 = Val::Px(7.0f32);
+        let border_radius = px(10.0f32);
+        let border_radius2 = px(7.0f32);
         let bar_right = width - ((width - (border * 2.0)) * normalized);
 
         let font_handle = context.construct::<Handle<Font>>("fonts/FiraSans-Bold.ttf")?;
@@ -169,11 +169,11 @@ impl Construct for HealthBar {
         let entity_patch = bsn! {
             (
                 Node {
-                    width: Val::Px(width),
-                    height: Val::Px(50.0),
+                    width: px(width),
+                    height: px(50.0),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
-                    border: UiRect::all(Val::Px(border)),
+                    border: px_all(border),
                 },
                 BackgroundColor(GRAY_100),
                 BorderColor(border_color),
@@ -188,9 +188,9 @@ impl Construct for HealthBar {
                     Node {
                         position_type: PositionType::Absolute,
                         top: Val::ZERO,
-                        bottom: Val::Px(border * 2.0),
+                        bottom: px(border * 2.0),
                         left: Val::ZERO,
-                        right: Val::Px(bar_right),
+                        right: px(bar_right),
                     },
                     BackgroundColor(bar_color),
                     BorderRadius {
@@ -212,100 +212,6 @@ impl Construct for HealthBar {
         };
 
         context.spawn_entity_patch(entity_patch)?;
-
-        // let entity_patch = EntityPatch {
-        //     patch: (
-        //         Node::patch(move |props| {
-        //             props.width = Val::Px(width);
-        //             props.height = Val::Px(50.0);
-        //             props.align_items = AlignItems::Center;
-        //             props.justify_content = JustifyContent::Center;
-        //             props.border = UiRect::all(Val::Px(border));
-        //         }),
-        //         BackgroundColor::patch(|props| props.0 = GRAY_800.into()),
-        //         BorderColor::patch(move |props| props.0 = border_color.into()),
-        //         BorderRadius::patch(|props| {
-        //             let val = Val::Px(10.0);
-        //             props.bottom_left = val;
-        //             props.bottom_right = val;
-        //             props.top_left = val;
-        //             props.top_right = val;
-        //         }),
-        //     ),
-        //     children: (
-        //         EntityPatch {
-        //             patch: (
-        //                 Node::patch(move |props| {
-        //                     props.position_type = PositionType::Absolute;
-        //                     props.top = Val::ZERO;
-        //                     props.bottom = Val::Px(border * 2.0);
-        //                     props.left = Val::ZERO;
-        //                     props.right = Val::Px(bar_right);
-        //                 }),
-        //                 BackgroundColor::patch(move |props| props.0 = bar_color.into()),
-        //                 BorderRadius::patch(|props| {
-        //                     let val = Val::Px(7.0);
-        //                     props.bottom_left = val;
-        //                     props.bottom_right = val;
-        //                     props.top_left = val;
-        //                     props.top_right = val;
-        //                 }),
-        //             ),
-        //             children: (),
-        //         },
-        //         EntityPatch {
-        //             patch: (
-        //                 Text::patch(move |props| props.0 = text.clone()),
-        //                 TextFont::patch(move |props| {
-        //                     props.font = font_handle.clone();
-        //                     props.font_size = 40.0;
-        //                 }),
-        //                 TextColor::patch(|props| props.0 = WHITE.into()),
-        //             ),
-        //             children: (),
-        //         },
-        //     ),
-        // };
-
-        //let mut entity = context.world.entity_mut(context.id);
-
-        // entity
-        //     .insert((
-        //         Node {
-        //             width: Val::Px(width),
-        //             height: Val::Px(50.0),
-        //             align_items: AlignItems::Center,
-        //             justify_content: JustifyContent::Center,
-        //             border: UiRect::all(Val::Px(border)),
-        //             ..default()
-        //         },
-        //         BackgroundColor(GRAY_800.into()),
-        //         BorderColor(border_color.into()),
-        //         BorderRadius::all(Val::Px(10.0)),
-        //     ))
-        //     .with_children(|parent| {
-        //         parent.spawn((
-        //             Node {
-        //                 position_type: PositionType::Absolute,
-        //                 top: Val::ZERO,
-        //                 bottom: Val::Px(border * 2.0), // weird stuff, bug?
-        //                 left: Val::ZERO,
-        //                 right: Val::Px(bar_right),
-        //                 ..default()
-        //             },
-        //             BackgroundColor(bar_color.into()),
-        //             BorderRadius::all(Val::Px(7.0)),
-        //         ));
-        //         parent.spawn((
-        //             Text::new(text),
-        //             TextFont {
-        //                 font: font_handle,
-        //                 font_size: 40.0,
-        //                 ..default()
-        //             },
-        //             TextColor(WHITE.into()),
-        //         ));
-        //     });
 
         Ok(Self { player_entity })
     }
