@@ -155,25 +155,6 @@ impl<'a> ConstructContext<'a> {
     }
 }
 
-/// Construct extension
-pub trait ConstructExt {
-    /// Construct a type using the given properties.
-    fn construct<T: Construct + Bundle>(&mut self, props: impl Into<T::Props>) -> EntityCommands
-    where
-        <T as Construct>::Props: Send;
-}
-
-/// Construct children extension
-pub trait ConstructChildrenExt: ConstructExt {
-    /// Construct a series of children using the given properties.
-    fn construct_children<T: Construct + Bundle>(
-        &mut self,
-        props: impl IntoIterator<Item = impl Into<T::Props>>,
-    ) -> EntityCommands
-    where
-        <T as Construct>::Props: Send;
-}
-
 struct ConstructCommand<T: Construct>(T::Props);
 
 impl<T: Construct + Bundle> EntityCommand for ConstructCommand<T>
@@ -185,6 +166,14 @@ where
         let c = T::construct(&mut context, self.0).expect("component");
         world.entity_mut(id).insert(c);
     }
+}
+
+/// Construct extension
+pub trait ConstructExt {
+    /// Construct a type using the given properties and insert it onto the entity.
+    fn construct<T: Construct + Bundle>(&mut self, props: impl Into<T::Props>) -> EntityCommands
+    where
+        <T as Construct>::Props: Send;
 }
 
 impl<'w> ConstructExt for Commands<'w, '_> {
@@ -218,23 +207,6 @@ impl<'w> ConstructExt for EntityCommands<'w> {
         <T as Construct>::Props: Send,
     {
         self.queue(ConstructCommand::<T>(props.into()));
-        self.reborrow()
-    }
-}
-
-impl<'w> ConstructChildrenExt for EntityCommands<'w> {
-    fn construct_children<T: Construct + Bundle>(
-        &mut self,
-        props: impl IntoIterator<Item = impl Into<T::Props>>,
-    ) -> EntityCommands
-    where
-        <T as Construct>::Props: Send,
-    {
-        self.with_children(|parent| {
-            for prop in props.into_iter() {
-                parent.construct::<T>(prop);
-            }
-        });
         self.reborrow()
     }
 }
