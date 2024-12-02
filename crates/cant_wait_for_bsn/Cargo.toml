@@ -1,0 +1,9 @@
+[package]
+name = "cant_wait_for_bsn"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { workspace = true }
+thiserror = { workspace = true }
+cant_wait_for_bsn_macros = { path = "macros", version = "0.1.0" }

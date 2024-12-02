@@ -1,0 +1,13 @@
+[package]
+name = "cant_wait_for_bsn_macros"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+bevy_macro_utils = { version = "0.15.0" }
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"

@@ -1,0 +1,25 @@
+[package]
+name = "bevy_ui_experiments2"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+resolver = "2"
+members = ["crates/cant_wait_for_bsn"]
+
+[workspace.dependencies]
+bevy = { version = "0.15.0" }
+thiserror = { version = "2" }
+
+[dependencies]
+bevy = { workspace = true }
+thiserror = { workspace = true }
+cant_wait_for_bsn = { path = "crates/cant_wait_for_bsn" }
+
+# Enable a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
