@@ -1,7 +1,7 @@
 //! Based on implementation from [bevy_asky](https://github.com/shanecelis/bevy_asky/blob/main/src/construct.rs).
+use alloc::borrow::Cow;
 use bevy::utils::all_tuples;
 use bevy::{ecs::system::EntityCommands, prelude::*};
-use std::borrow::Cow;
 use thiserror::Error;
 
 /// Construction error
@@ -31,9 +31,9 @@ pub enum ConstructProp<T: Construct> {
 }
 
 impl<T: Construct> ConstructProp<T> {
-    /// Consumes the [`ConstructProp`] and returns the (constructed) value.
+    /// Consumes the [`ConstructProp`] and returns the inner value, constructed if necessary.
     ///
-    /// Added for convenience.
+    /// Not part of scene discussion, but added for convenience.
     pub fn construct(self, context: &mut ConstructContext) -> Result<T, ConstructError> {
         match self {
             ConstructProp::Prop(p) => Construct::construct(context, p),
@@ -44,10 +44,7 @@ impl<T: Construct> ConstructProp<T> {
 
 /// Construct driver trait
 pub trait Construct: Sized {
-    /// Properties must be Clone.
-    ///
-    /// NOTE: Cart's proposal states they must also be Default,
-    /// but I had trouble making that work.
+    /// Props
     type Props: Default + Clone;
 
     /// Construct an item.
@@ -56,33 +53,6 @@ pub trait Construct: Sized {
         props: Self::Props,
     ) -> Result<Self, ConstructError>;
 }
-
-/// Add a silent partner.
-// #[derive(Bundle)]
-// pub struct Add<A: Sync + Send + 'static + Bundle, B: Sync + Send + 'static + Bundle>(pub A, pub B);
-
-// unsafe impl<A: Submitter + Sync + Send + 'static + Bundle, B: Sync + Send + 'static + Bundle>
-//     Submitter for Add<A, B>
-// {
-//     /// Output of submitter.
-//     type Out = A::Out;
-// }
-
-// impl<A, B> Construct for Add<A, B>
-// where
-//     A: Construct + Sync + Send + 'static + Bundle,
-//     B: Construct<Props = ()> + Sync + Send + 'static + Bundle,
-// {
-//     type Props = A::Props;
-//     fn construct(
-//         context: &mut ConstructContext,
-//         props: Self::Props,
-//     ) -> Result<Self, ConstructError> {
-//         let a = A::construct(context, props)?;
-//         let b = B::construct(context, ())?;
-//         Ok(Add(a, b))
-//     }
-// }
 
 impl<T: Asset> Construct for Handle<T> {
     //type Props = AssetPath<'static>;
@@ -101,7 +71,7 @@ impl<T: Asset> Construct for Handle<T> {
     }
 }
 
-// I couldn't have this an the tuple construct.
+// TODO: This blanket impl is mentioned in the scene discussion, but is ambigous with custom impl Construct, and tuple impls.
 // impl<T: Default + Clone> Construct for T {
 //     type Props = T;
 //     #[inline]
@@ -139,7 +109,8 @@ impl_construct_passthrough!(TextColor);
 
 // Tuple impls
 macro_rules! impl_construct_for_tuple {
-    ($(($T:ident, $t:ident)),*) => {
+    ($(#[$meta:meta])* $(($T:ident, $t:ident)),*) => {
+        $(#[$meta])*
         impl<$($T: Construct),*> Construct for ($($T,)*)
         {
             type Props = ($($T::Props,)*);
@@ -156,35 +127,14 @@ macro_rules! impl_construct_for_tuple {
     };
 }
 
-all_tuples!(impl_construct_for_tuple, 0, 12, T, t);
-
-// impl Construct for () {
-//     type Props = ();
-//     #[inline]
-//     fn construct(
-//         _context: &mut ConstructContext,
-//         props: Self::Props,
-//     ) -> Result<Self, ConstructError> {
-//         Ok(props)
-//     }
-// }
-
-// impl<A: Construct, B: Construct> Construct for (A, B)
-// // where
-// //     A: Construct,
-// //     B: Construct,
-// {
-//     type Props = (A::Props, B::Props);
-//     fn construct(
-//         context: &mut ConstructContext,
-//         props: Self::Props,
-//     ) -> Result<Self, ConstructError> {
-//         let (A, B) = props;
-//         let A = context.construct(A)?;
-//         let B = context.construct(B)?;
-//         Ok((A, B))
-//     }
-// }
+all_tuples!(
+    #[doc(fake_variadic)]
+    impl_construct_for_tuple,
+    0,
+    12,
+    T,
+    t
+);
 
 /// An entity and a mutable world
 #[derive(Debug)]
@@ -206,8 +156,6 @@ impl<'a> ConstructContext<'a> {
 }
 
 /// Construct extension
-///
-/// The main touch point for the user.
 pub trait ConstructExt {
     /// Construct a type using the given properties.
     fn construct<T: Construct + Bundle>(&mut self, props: impl Into<T::Props>) -> EntityCommands
@@ -228,7 +176,7 @@ pub trait ConstructChildrenExt: ConstructExt {
 
 struct ConstructCommand<T: Construct>(T::Props);
 
-impl<T: Construct + Bundle> bevy::ecs::system::EntityCommand for ConstructCommand<T>
+impl<T: Construct + Bundle> EntityCommand for ConstructCommand<T>
 where
     <T as Construct>::Props: Send,
 {
@@ -273,23 +221,6 @@ impl<'w> ConstructExt for EntityCommands<'w> {
         self.reborrow()
     }
 }
-
-// impl<'w> ConstructExt for EntityWorldMut<'w> {
-//     // type Out = EntityCommands;
-//     fn construct<T: Construct + Bundle>(&mut self, props: impl Into<T::Props>) -> EntityWorldMut<'w>
-//     where
-//         <T as Construct>::Props: Send,
-//     {
-//         let ctx = ConstructContext {
-//             id: self.id(),
-//             world: unsafe { self.world_mut() }, // SAFETY: TODO
-//         };
-
-//         // Construct::construct()
-//         // self.queue(ConstructCommand::<T>(props.into()));
-//         // self.reborrow()
-//     }
-// }
 
 impl<'w> ConstructChildrenExt for EntityCommands<'w> {
     fn construct_children<T: Construct + Bundle>(

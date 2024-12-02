@@ -1,3 +1,4 @@
+//! Playground
 use bevy::{
     color::palettes::{css::WHITE, tailwind::*},
     prelude::*,

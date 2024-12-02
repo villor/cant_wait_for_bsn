@@ -2,13 +2,18 @@ use bevy::{prelude::BuildChildren, utils::all_tuples};
 
 use crate::{ConstructContext, ConstructContextPatchExt, ConstructError, Patch};
 
+/// Represents a tree of entities and patches to be applied to them.
 pub struct EntityPatch<P: Patch, C: EntityPatchChildren> {
     // inherit: ?
+    /// Patch that will be constructed and inserted as a bundle on this entity.
     pub patch: P,
+    /// Zero or more [`EntityPatch`]es for the children of this entity.
     pub children: C,
 }
 
+/// A tuple of [`EntityPatch`]es spawnable as children to the entity in a [`ConstructContext`].
 pub trait EntityPatchChildren {
+    /// Recursively spawns all the children and their descendant patches.
     fn spawn(self, context: &mut ConstructContext) -> Result<(), ConstructError>;
 }
 
@@ -33,7 +38,8 @@ impl<P: Patch, C: EntityPatchChildren> EntityPatchChildren for EntityPatch<P, C>
 
 // Tuple impls
 macro_rules! impl_entity_patch_children_tuple {
-    ($(($P:ident, $C:ident, $e:ident)),*) => {
+    ($(#[$meta:meta])* $(($P:ident, $C:ident, $e:ident)),*) => {
+        $(#[$meta])*
         impl<$($P: Patch),*,$($C: EntityPatchChildren),*> EntityPatchChildren
             for ($(EntityPatch<$P, $C>,)*)
         {
@@ -46,9 +52,19 @@ macro_rules! impl_entity_patch_children_tuple {
     };
 }
 
-all_tuples!(impl_entity_patch_children_tuple, 1, 12, P, C, e);
+all_tuples!(
+    #[doc(fake_variadic)]
+    impl_entity_patch_children_tuple,
+    1,
+    12,
+    P,
+    C,
+    e
+);
 
+/// Extension trait implementing [`EntityPatch`] utilities for [`ConstructContext`].
 pub trait ConstructContextEntityPatchExt {
+    /// Spawns an [`EntityPatch`] recursively.
     fn spawn_entity_patch<P: Patch, C: EntityPatchChildren>(
         &mut self,
         entity_patch: EntityPatch<P, C>,

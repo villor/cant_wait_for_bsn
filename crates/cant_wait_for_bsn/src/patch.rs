@@ -1,6 +1,6 @@
 //! Based on implementation from [bevy_asky](https://github.com/shanecelis/bevy_asky/blob/main/src/construct.rs).
 use bevy::{prelude::*, utils::all_tuples};
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 use crate::construct::{Construct, ConstructContext, ConstructError};
 
@@ -14,7 +14,8 @@ pub trait Patch: Send + Sync + 'static {
 
 // Tuple impls
 macro_rules! impl_patch_for_tuple {
-    ($(($T:ident, $t:ident)),*) => {
+    ($(#[$meta:meta])* $(($T:ident, $t:ident)),*) => {
+        $(#[$meta])*
         impl<$($T: Patch),*> Patch for ($($T,)*)
         {
             type Construct = ($($T::Construct,)*);
@@ -29,7 +30,14 @@ macro_rules! impl_patch_for_tuple {
     };
 }
 
-all_tuples!(impl_patch_for_tuple, 0, 12, T, t);
+all_tuples!(
+    #[doc(fake_variadic)]
+    impl_patch_for_tuple,
+    0,
+    12,
+    T,
+    t
+);
 
 /// Generic patch based on closure
 pub struct ConstructPatch<C: Construct, F> {
@@ -48,9 +56,12 @@ impl<
     }
 }
 
+/// Extension trait for adding a [`ConstructPatchExt::patch`] utility to any types implementing [`Construct`].
 pub trait ConstructPatchExt {
+    /// Construct
     type C: Construct;
 
+    /// Returns a [`ConstructPatch`] wrapping the provided closure.
     fn patch<F: FnMut(&mut <<Self as ConstructPatchExt>::C as Construct>::Props)>(
         func: F,
     ) -> ConstructPatch<Self::C, F> {
@@ -65,6 +76,7 @@ impl<C: Construct> ConstructPatchExt for C {
     type C = C;
 }
 
+/// Extension trait implementing patch utilities for [`ConstructContext`].
 pub trait ConstructContextPatchExt {
     /// Construct from patch
     fn construct_from_patch<P: Patch>(
@@ -76,7 +88,6 @@ pub trait ConstructContextPatchExt {
 }
 
 impl<'a> ConstructContextPatchExt for ConstructContext<'a> {
-    /// Construct from patch
     fn construct_from_patch<P: Patch>(
         &mut self,
         patch: &mut P,
