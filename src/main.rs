@@ -61,66 +61,15 @@ fn ui() -> impl Scene {
     }
 }
 
-#[derive(Deref, Clone)]
-struct EntityRef(Entity);
-
-#[derive(Default, Clone)]
-enum EntityPath {
-    #[default]
-    None,
-    Name(&'static str),
-    Entity(Entity),
-}
-
-impl From<&'static str> for EntityPath {
-    fn from(value: &'static str) -> Self {
-        Self::Name(value)
-    }
-}
-
-impl From<Entity> for EntityPath {
-    fn from(value: Entity) -> Self {
-        Self::Entity(value)
-    }
-}
-
-impl Construct for EntityRef {
-    type Props = EntityPath;
-
-    fn construct(
-        context: &mut ConstructContext,
-        props: Self::Props,
-    ) -> Result<Self, ConstructError> {
-        match props {
-            EntityPath::Name(name) => {
-                let mut query = context.world.query::<(Entity, &Name)>();
-                let entity = query
-                    .iter(context.world)
-                    .filter(|(_, q_name)| q_name.as_str() == name)
-                    .map(|(entity, _)| EntityRef(entity))
-                    .next();
-
-                entity.ok_or_else(|| ConstructError::InvalidProps {
-                    message: format!("entity with name {} does not exist", name).into(),
-                })
-            }
-            EntityPath::Entity(entity) => Ok(EntityRef(entity)),
-            _ => Err(ConstructError::InvalidProps {
-                message: "no entity supplied".into(),
-            }),
-        }
-    }
-}
-
 #[derive(Component, Clone)]
 struct HealthBar {
-    player_entity: EntityRef,
+    player_entity: ConstructEntity,
 }
 
 #[allow(missing_docs)]
 #[derive(Clone)]
 pub struct HealthBarProps {
-    player_entity: ConstructProp<EntityRef>,
+    player_entity: ConstructProp<ConstructEntity>,
 }
 
 impl Default for HealthBarProps {
@@ -142,7 +91,7 @@ impl Construct for HealthBar {
         let health = context
             .world
             .query::<&Health>()
-            .get(context.world, player_entity.0)
+            .get(context.world, *player_entity)
             .ok();
 
         let text = health

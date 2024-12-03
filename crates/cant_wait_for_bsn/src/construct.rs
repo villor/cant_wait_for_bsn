@@ -1,6 +1,5 @@
 //! Based on implementation from [bevy_asky](https://github.com/shanecelis/bevy_asky/blob/main/src/construct.rs).
 use alloc::borrow::Cow;
-use bevy::utils::all_tuples;
 use bevy::{ecs::system::EntityCommands, prelude::*};
 use thiserror::Error;
 
@@ -59,90 +58,6 @@ pub trait Construct: Sized {
         props: Self::Props,
     ) -> Result<Self, ConstructError>;
 }
-
-impl<T: Asset> Construct for Handle<T> {
-    //type Props = AssetPath<'static>;
-    type Props = &'static str;
-
-    fn construct(
-        context: &mut ConstructContext,
-        path: Self::Props,
-    ) -> Result<Self, ConstructError> {
-        // if let Err(err) = path.validate() {
-        //     return Err(ConstructError::InvalidProps {
-        //         message: format!("Invalid Asset Path: {err}").into(),
-        //     });
-        // }
-        Ok(context.world.resource::<AssetServer>().load(path))
-    }
-}
-
-// TODO: This blanket impl is mentioned in the scene discussion, but is ambigous with custom impl Construct, and tuple impls.
-// impl<T: Default + Clone> Construct for T {
-//     type Props = T;
-//     #[inline]
-//     fn construct(
-//         _context: &mut ConstructContext,
-//         props: Self::Props,
-//     ) -> Result<Self, ConstructError> {
-//         Ok(props)
-//     }
-// }
-
-// Workaround, implement for some Bevy components
-macro_rules! impl_construct_passthrough {
-    ($T:ident) => {
-        impl Construct for $T {
-            type Props = $T;
-            #[inline]
-            fn construct(
-                _context: &mut ConstructContext,
-                props: Self::Props,
-            ) -> Result<Self, ConstructError> {
-                Ok(props)
-            }
-        }
-    };
-}
-impl_construct_passthrough!(Transform);
-impl_construct_passthrough!(Node);
-impl_construct_passthrough!(BackgroundColor);
-impl_construct_passthrough!(BorderColor);
-impl_construct_passthrough!(BorderRadius);
-impl_construct_passthrough!(Text);
-impl_construct_passthrough!(TextFont);
-impl_construct_passthrough!(TextColor);
-impl_construct_passthrough!(Camera2d);
-impl_construct_passthrough!(Name);
-
-// Tuple impls
-macro_rules! impl_construct_for_tuple {
-    ($(#[$meta:meta])* $(($T:ident, $t:ident)),*) => {
-        $(#[$meta])*
-        impl<$($T: Construct),*> Construct for ($($T,)*)
-        {
-            type Props = ($($T::Props,)*);
-
-            fn construct(
-                _context: &mut ConstructContext,
-                props: Self::Props,
-            ) -> Result<Self, ConstructError> {
-                let ($($t,)*) = props;
-                $(let $t = $T::construct(_context, $t)?;)*
-                Ok(($($t,)*))
-            }
-        }
-    };
-}
-
-all_tuples!(
-    #[doc(fake_variadic)]
-    impl_construct_for_tuple,
-    0,
-    12,
-    T,
-    t
-);
 
 /// An entity and a mutable world
 #[derive(Debug)]
