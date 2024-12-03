@@ -17,6 +17,8 @@ macro_rules! impl_patch_for_tuple {
     ($(#[$meta:meta])* $(($T:ident, $t:ident)),*) => {
         $(#[$meta])*
         impl<$($T: Patch),*> Patch for ($($T,)*)
+        where
+            ($($T::Construct,)*): Construct<Props = ($(<$T::Construct as Construct>::Props,)*),>,
         {
             type Construct = ($($T::Construct,)*);
 

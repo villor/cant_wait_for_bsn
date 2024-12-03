@@ -1,10 +1,24 @@
 use bevy::prelude::*;
-use bevy::utils::all_tuples;
 
 use crate::{Construct, ConstructContext, ConstructError};
 
-// Asset handles
-impl<T: Asset> Construct for Handle<T> {
+/// Constructable asset handle (because Handle<T> implements Default in Bevy right now)
+#[derive(Deref, DerefMut)]
+pub struct ConstructHandle<T: Asset>(Handle<T>);
+
+impl<T: Asset> From<Handle<T>> for ConstructHandle<T> {
+    fn from(value: Handle<T>) -> Self {
+        ConstructHandle(value)
+    }
+}
+
+impl<T: Asset> From<ConstructHandle<T>> for Handle<T> {
+    fn from(value: ConstructHandle<T>) -> Self {
+        value.0
+    }
+}
+
+impl<T: Asset> Construct for ConstructHandle<T> {
     //type Props = AssetPath<'static>;
     type Props = &'static str;
 
@@ -17,38 +31,9 @@ impl<T: Asset> Construct for Handle<T> {
         //         message: format!("Invalid Asset Path: {err}").into(),
         //     });
         // }
-        Ok(context.world.resource::<AssetServer>().load(path))
+        Ok(context.world.resource::<AssetServer>().load(path).into())
     }
 }
-
-// Tuple impls
-macro_rules! impl_construct_for_tuple {
-    ($(#[$meta:meta])* $(($T:ident, $t:ident)),*) => {
-        $(#[$meta])*
-        impl<$($T: Construct),*> Construct for ($($T,)*)
-        {
-            type Props = ($($T::Props,)*);
-
-            fn construct(
-                _context: &mut ConstructContext,
-                props: Self::Props,
-            ) -> Result<Self, ConstructError> {
-                let ($($t,)*) = props;
-                $(let $t = $T::construct(_context, $t)?;)*
-                Ok(($($t,)*))
-            }
-        }
-    };
-}
-
-all_tuples!(
-    #[doc(fake_variadic)]
-    impl_construct_for_tuple,
-    0,
-    12,
-    T,
-    t
-);
 
 /// Entity reference constructable using [`EntityPath`], allowing passing either entity name or id as prop.
 #[derive(Deref, Clone)]
@@ -105,41 +90,3 @@ impl Construct for ConstructEntity {
         }
     }
 }
-
-// TODO: This blanket impl is mentioned in the scene discussion, but is ambigous with custom impl Construct (for Default types), and tuple impls.
-// impl<T: Default + Clone> Construct for T {
-//     type Props = T;
-//     #[inline]
-//     fn construct(
-//         _context: &mut ConstructContext,
-//         props: Self::Props,
-//     ) -> Result<Self, ConstructError> {
-//         Ok(props)
-//     }
-// }
-
-// Workaround for missing Default blanket, implement for some Bevy components to play with
-macro_rules! impl_default_workaround {
-    ($T:ident) => {
-        impl Construct for $T {
-            type Props = $T;
-            #[inline]
-            fn construct(
-                _context: &mut ConstructContext,
-                props: Self::Props,
-            ) -> Result<Self, ConstructError> {
-                Ok(props)
-            }
-        }
-    };
-}
-impl_default_workaround!(Transform);
-impl_default_workaround!(Node);
-impl_default_workaround!(BackgroundColor);
-impl_default_workaround!(BorderColor);
-impl_default_workaround!(BorderRadius);
-impl_default_workaround!(Text);
-impl_default_workaround!(TextFont);
-impl_default_workaround!(TextColor);
-impl_default_workaround!(Camera2d);
-impl_default_workaround!(Name);

@@ -117,7 +117,7 @@ impl Construct for HealthBar {
         let border_radius2 = px(7.0f32);
         let bar_right = width - ((width - (border * 2.0)) * normalized);
 
-        let font_handle = context.construct::<Handle<Font>>("fonts/FiraSans-Bold.ttf")?;
+        let font_handle = context.construct::<ConstructHandle<Font>>("fonts/FiraSans-Bold.ttf")?;
 
         let entity_patch = bsn! {
             (

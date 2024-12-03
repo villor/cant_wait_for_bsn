@@ -59,6 +59,18 @@ pub trait Construct: Sized {
     ) -> Result<Self, ConstructError>;
 }
 
+// Blanket-implement Construct passthrough for all Default + Clone types.
+impl<T: Default + Clone> Construct for T {
+    type Props = T;
+    #[inline]
+    fn construct(
+        _context: &mut ConstructContext,
+        props: Self::Props,
+    ) -> Result<Self, ConstructError> {
+        Ok(props)
+    }
+}
+
 /// An entity and a mutable world
 #[derive(Debug)]
 pub struct ConstructContext<'a> {
