@@ -18,3 +18,4 @@ pub use entity_patch::*;
 pub use patch::*;
 
 pub use cant_wait_for_bsn_macros::bsn;
+pub use cant_wait_for_bsn_macros::Construct;

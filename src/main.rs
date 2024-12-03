@@ -13,7 +13,7 @@ fn main() {
         .run();
 }
 
-#[derive(Component, Reflect, Clone, Default)]
+#[derive(Component, Construct)]
 struct Health {
     current: i32,
     max: i32,
@@ -34,13 +34,12 @@ fn setup(mut commands: Commands) {
     commands.spawn((Camera2d, IsDefaultUiCamera));
 
     // Player1
-    commands.spawn((
-        Name::new("Player1"),
+    commands.spawn(Name::new("Player1")).construct_patch(bsn! {
         Health {
             current: 2000,
             max: 2000,
-        },
-    ));
+        }
+    });
 
     // UI root
     commands.spawn_scene(ui());
