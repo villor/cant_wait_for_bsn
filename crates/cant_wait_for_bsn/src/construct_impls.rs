@@ -1,9 +1,11 @@
+use alloc::borrow::Cow;
+
 use bevy::prelude::*;
 
 use crate::{Construct, ConstructContext, ConstructError};
 
 /// Constructable asset handle (because Handle<T> implements Default in Bevy right now)
-#[derive(Deref, DerefMut)]
+#[derive(Deref, DerefMut, Clone)]
 pub struct ConstructHandle<T: Asset>(Handle<T>);
 
 impl<T: Asset> From<Handle<T>> for ConstructHandle<T> {
@@ -36,8 +38,20 @@ impl<T: Asset> Construct for ConstructHandle<T> {
 }
 
 /// Entity reference constructable using [`EntityPath`], allowing passing either entity name or id as prop.
-#[derive(Deref, Clone)]
+#[derive(Deref, DerefMut, Clone)]
 pub struct ConstructEntity(Entity);
+
+impl From<Entity> for ConstructEntity {
+    fn from(value: Entity) -> Self {
+        ConstructEntity(value)
+    }
+}
+
+impl From<ConstructEntity> for Entity {
+    fn from(value: ConstructEntity) -> Self {
+        value.0
+    }
+}
 
 /// The construct prop for [`ConstructEntity`].
 #[derive(Default, Clone)]
@@ -46,14 +60,20 @@ pub enum EntityPath {
     #[default]
     None,
     /// Name
-    Name(&'static str),
+    Name(Cow<'static, str>),
     /// Entity
     Entity(Entity),
 }
 
 impl From<&'static str> for EntityPath {
     fn from(value: &'static str) -> Self {
-        Self::Name(value)
+        Self::Name(value.into())
+    }
+}
+
+impl From<String> for EntityPath {
+    fn from(value: String) -> Self {
+        Self::Name(value.into())
     }
 }
 
