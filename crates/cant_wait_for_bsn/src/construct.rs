@@ -112,6 +112,8 @@ impl_construct_passthrough!(BorderRadius);
 impl_construct_passthrough!(Text);
 impl_construct_passthrough!(TextFont);
 impl_construct_passthrough!(TextColor);
+impl_construct_passthrough!(Camera2d);
+impl_construct_passthrough!(Name);
 
 // Tuple impls
 macro_rules! impl_construct_for_tuple {

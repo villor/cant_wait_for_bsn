@@ -3,7 +3,7 @@ use bevy::{
     color::palettes::{css::WHITE, tailwind::*},
     prelude::*,
 };
-use cant_wait_for_bsn::*;
+use cant_wait_for_bsn::{Scene, *};
 
 fn main() {
     App::new()
@@ -13,7 +13,7 @@ fn main() {
         .run();
 }
 
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Clone, Default)]
 struct Health {
     current: i32,
     max: i32,
@@ -30,35 +30,35 @@ fn game_health_update(mut players: Query<&mut Health>, keyboard_input: Res<Butto
 }
 
 fn setup(mut commands: Commands) {
-    let _player1 = commands
-        .spawn((
-            Health {
-                current: 2000,
-                max: 2000,
-            },
-            Name::new("Player1"),
-        ))
-        .id();
-
     // UI Camera
     commands.spawn((Camera2d, IsDefaultUiCamera));
 
+    // Player1
+    commands.spawn((
+        Name::new("Player1"),
+        Health {
+            current: 2000,
+            max: 2000,
+        },
+    ));
+
     // UI root
-    commands
-        .spawn(Node {
+    commands.spawn_scene(ui());
+}
+
+fn ui() -> impl Scene {
+    bsn! {
+        Node {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
-            ..default()
-        })
-        .with_children(|parent| {
-            parent.spawn_empty().construct_patch(bsn! {
-                HealthBar {
-                    player_entity: @"Player1",
-                }
-            });
-        });
+        } [
+            HealthBar {
+                player_entity: @"Player1",
+            }
+        ]
+    }
 }
 
 #[derive(Deref, Clone)]
