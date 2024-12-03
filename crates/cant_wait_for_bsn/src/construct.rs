@@ -42,6 +42,12 @@ impl<T: Construct> ConstructProp<T> {
     }
 }
 
+impl<T: Construct> From<T> for ConstructProp<T> {
+    fn from(value: T) -> Self {
+        Self::Value(value)
+    }
+}
+
 /// Construct driver trait
 pub trait Construct: Sized {
     /// Props

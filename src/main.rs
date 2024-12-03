@@ -30,11 +30,14 @@ fn game_health_update(mut players: Query<&mut Health>, keyboard_input: Res<Butto
 }
 
 fn setup(mut commands: Commands) {
-    let player1 = commands
-        .spawn(Health {
-            current: 2000,
-            max: 2000,
-        })
+    let _player1 = commands
+        .spawn((
+            Health {
+                current: 2000,
+                max: 2000,
+            },
+            Name::new("Player1"),
+        ))
         .id();
 
     // UI Camera
@@ -52,7 +55,7 @@ fn setup(mut commands: Commands) {
         .with_children(|parent| {
             parent.spawn_empty().construct_patch(bsn! {
                 HealthBar {
-                    player_entity: ConstructProp::Prop(player1.into()),
+                    player_entity: @"Player1",
                 }
             });
         });
@@ -65,12 +68,12 @@ struct EntityRef(Entity);
 enum EntityPath {
     #[default]
     None,
-    Name(String),
+    Name(&'static str),
     Entity(Entity),
 }
 
-impl From<String> for EntityPath {
-    fn from(value: String) -> Self {
+impl From<&'static str> for EntityPath {
+    fn from(value: &'static str) -> Self {
         Self::Name(value)
     }
 }

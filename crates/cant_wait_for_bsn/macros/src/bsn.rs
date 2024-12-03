@@ -6,7 +6,7 @@ use syn::{
     parse2,
     punctuated::Punctuated,
     token::{self, Brace, Paren},
-    Expr, FieldValue, Member, Path, Result, Token,
+    Expr, Member, Path, Result, Token,
 };
 
 pub fn bsn(item: TokenStream) -> TokenStream {
@@ -58,7 +58,7 @@ impl ToTokens for BsnEntity {
 
 #[derive(Debug)]
 pub enum BsnPatch {
-    Patch(Path, Vec<(Member, Expr)>),
+    Patch(Path, Vec<(Member, BsnProp)>),
     Tuple(Punctuated<BsnPatch, Token![,]>),
     // Expr(Expr),
 }
@@ -81,19 +81,27 @@ impl Parse for BsnPatch {
                 let content;
                 parenthesized![content in input];
                 content
-                    .parse_terminated(Expr::parse, Token![,])?
+                    .parse_terminated(BsnProp::parse, Token![,])?
                     .iter()
                     .enumerate()
-                    .map(|(i, expr)| (Member::from(i), expr.clone())) // TODO: Avoid clone?
+                    .map(|(i, prop)| (Member::from(i), prop.clone())) // TODO: Avoid clone?
                     .collect()
             } else if input.peek(Brace) {
                 // Struct (braced)
                 let content;
                 braced![content in input];
                 content
-                    .parse_terminated(FieldValue::parse, Token![,])?
+                    .parse_terminated(
+                        |input| {
+                            let member: Member = input.parse()?;
+                            let _colon_token: Token![:] = input.parse()?;
+                            let prop: BsnProp = input.parse()?;
+                            Ok((member, prop))
+                        },
+                        Token![,],
+                    )?
                     .iter()
-                    .map(|field_value| (field_value.member.clone(), field_value.expr.clone())) // TODO: Avoid clone?
+                    .cloned() // TODO: Avoid clone?
                     .collect()
             } else {
                 Vec::new()
@@ -109,9 +117,9 @@ impl ToTokens for BsnPatch {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             BsnPatch::Patch(path, fields) => {
-                let assignments = fields.iter().map(|(member, expr)| {
+                let assignments = fields.iter().map(|(member, prop)| {
                     quote! {
-                        props.#member = (#expr).into();
+                        props.#member = #prop;
                     }
                 });
                 quote! {
@@ -126,5 +134,40 @@ impl ToTokens for BsnPatch {
             }
             .to_tokens(tokens),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum BsnProp {
+    Value(Expr),
+    Prop(Expr),
+}
+
+impl Parse for BsnProp {
+    fn parse(input: ParseStream) -> Result<BsnProp> {
+        let is_prop = input.parse::<Token![@]>().is_ok();
+        let expr = input.parse::<Expr>()?;
+        match is_prop {
+            true => Ok(BsnProp::Prop(expr)),
+            false => Ok(BsnProp::Value(expr)),
+        }
+    }
+}
+
+impl ToTokens for BsnProp {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let cant_wait_for_bsn = syn::Path::from(Ident::new(
+            "cant_wait_for_bsn",
+            proc_macro2::Span::call_site(),
+        ));
+        match self {
+            BsnProp::Value(expr) => quote! {
+                (#expr).into()
+            },
+            BsnProp::Prop(expr) => quote! {
+                #cant_wait_for_bsn::ConstructProp::Prop((#expr).into())
+            },
+        }
+        .to_tokens(tokens);
     }
 }
