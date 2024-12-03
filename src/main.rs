@@ -164,7 +164,7 @@ impl Construct for HealthBar {
             ]
         };
 
-        context.spawn_entity_patch(entity_patch)?;
+        context.construct_entity_patch(entity_patch)?;
 
         Ok(Self { player_entity })
     }
