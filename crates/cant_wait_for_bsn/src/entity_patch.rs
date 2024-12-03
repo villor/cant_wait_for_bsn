@@ -195,19 +195,19 @@ where
 /// Scene spawning extension.
 pub trait SpawnSceneExt {
     /// Spawn the given [`Scene`].
-    fn spawn_scene(self, scene: impl Scene + Send + 'static) -> Self;
+    fn spawn_scene(&mut self, scene: impl Scene + Send + 'static) -> &mut Self;
 }
 
 impl<'w> SpawnSceneExt for Commands<'w, '_> {
     /// Spawn the given [`Scene`].
-    fn spawn_scene(mut self, scene: impl Scene + Send + 'static) -> Self {
+    fn spawn_scene(&mut self, scene: impl Scene + Send + 'static) -> &mut Self {
         self.spawn_empty().queue(ConstructSceneCommand(scene));
         self
     }
 }
 
 impl<'w> SpawnSceneExt for ChildBuilder<'w> {
-    fn spawn_scene(mut self, scene: impl Scene + Send + 'static) -> Self {
+    fn spawn_scene(&mut self, scene: impl Scene + Send + 'static) -> &mut Self {
         self.spawn_empty().queue(ConstructSceneCommand(scene));
         self
     }
