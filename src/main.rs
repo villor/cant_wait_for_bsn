@@ -33,33 +33,23 @@ fn setup(mut commands: Commands) {
     // UI Camera
     commands.spawn((Camera2d, IsDefaultUiCamera));
 
-    // Player1
-    commands.spawn(Name::new("Player1")).construct_patch(bsn! {
-        Health {
-            current: 2000,
-            max: 2000,
-        }
-    });
+    // Spawn players
+    commands.spawn_scene(player("Player1"));
+    commands.spawn_scene(player("Player2"));
 
     // UI root
     commands.spawn_scene(ui());
 }
 
-//fn player(name: &'static str) -> impl Scene {
-// bsn! {(
-//     //Name::new(name),
-//     Health {
-//         current: 2000,
-//         max: 2000,
-//     },
-//     Node
-// )}
-// EntityPatch {
-//     patch: (ClonedPatch::new(Name::new("test"))),
-//     children: (),
-// }
-//TODO: Make the above work. We want to be able to use expressions in place of bundles.
-//}
+fn player(name: &'static str) -> impl Scene {
+    bsn! {(
+        {Name::new(name)},
+        Health {
+            current: 2000,
+            max: 2000,
+        },
+    )}
+}
 
 fn ui() -> impl Scene {
     bsn! {

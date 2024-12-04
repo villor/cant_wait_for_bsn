@@ -99,28 +99,32 @@ impl<C: Construct> ConstructPatchExt for C {
     type C = C;
 }
 
-/// Cloned patch. Wraps a value that will be cloned on patch to overwrite the props.
-// pub struct ClonedPatch<T: Construct + Bundle>(T::Props);
+/// Wraps props that will be cloned on patch to overwrite the passed props.
+///
+/// Main reason for existing is to support function calls and expression in bsn, where the compiler can infer the type.
+pub struct CloneOnPatch<T: Construct + Bundle>(T::Props);
 
-// impl<T: Construct + Bundle> ClonedPatch<T>
-// where
-//     T: Construct<Props = T>,
-// {
-//     /// Construct a [`ClonedPatch`]. Only works for types where the construct and props have the same type.
-//     pub fn new(props: T) -> Self {
-//         Self(props)
-//     }
-// }
+impl<T: Construct + Bundle> CloneOnPatch<T>
+where
+    T: Construct<Props = T>,
+{
+    /// Construct a [`CloneOnPatch`].
+    ///
+    /// Only works for types where the construct and props have the same type, as the [`Construct`] type cannot be inferred from props otherwise.
+    pub fn new(props: T) -> Self {
+        Self(props)
+    }
+}
 
-// impl<T: Construct + Bundle> Patch for ClonedPatch<T>
-// where
-//     <T as Construct>::Props: Sync + Send,
-// {
-//     type Construct = T;
-//     fn patch(&mut self, props: &mut <Self::Construct as Construct>::Props) {
-//         *props = self.0.clone();
-//     }
-// }
+impl<T: Construct + Bundle> Patch for CloneOnPatch<T>
+where
+    <T as Construct>::Props: Sync + Send,
+{
+    type Construct = T;
+    fn patch(&mut self, props: &mut <Self::Construct as Construct>::Props) {
+        *props = self.0.clone();
+    }
+}
 
 /// Extension trait implementing patch utilities for [`ConstructContext`].
 pub trait ConstructContextPatchExt {

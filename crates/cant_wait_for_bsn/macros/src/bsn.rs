@@ -9,6 +9,16 @@ use syn::{
     Expr, Member, Path, Result, Token,
 };
 
+// TODO: Better rust-analyzer support
+
+// TODO: Support nested constructs? E.g:
+// bsn! {
+//    ConstructOuter {
+//        some_prop: ConstructInner {
+//            inner_prop: @"asset.txt",
+//        }
+//    }
+
 pub fn bsn(item: TokenStream) -> TokenStream {
     match parse2::<BsnEntity>(item) {
         Ok(bsn) => bsn.into_token_stream(),
@@ -60,20 +70,26 @@ impl ToTokens for BsnEntity {
 pub enum BsnPatch {
     Patch(Path, Vec<(Member, BsnProp)>),
     Tuple(Punctuated<BsnPatch, Token![,]>),
-    //Expr(Expr),
+    Expr(Expr),
 }
 
 impl Parse for BsnPatch {
     fn parse(input: ParseStream) -> Result<BsnPatch> {
-        // TODO: DIY parsing to get better autocomplete?
-
         // TODO: Flatten tuples recursively?
         if input.peek(Paren) {
             let content;
             parenthesized![content in input];
             let tuple = content.parse_terminated(BsnPatch::parse, Token![,])?;
             Ok(BsnPatch::Tuple(tuple))
+        } else if input.peek(Brace) {
+            // Treat braced content as expression
+            let content;
+            braced![content in input];
+            let expr = content.parse::<Expr>()?;
+            Ok(BsnPatch::Expr(expr))
         } else {
+            // TODO: Maybe also support fallback-to-expression for maybe-structs that don't turn out to be parsable as struct
+            // Another idea is to treat paths where last segment is lowercase (probably function call) as expr by default.
             let path = input.parse::<Path>()?;
 
             let fields = if input.peek(Paren) {
@@ -109,7 +125,6 @@ impl Parse for BsnPatch {
 
             Ok(BsnPatch::Patch(path, fields))
         }
-        // TODO: Support other expressions?
     }
 }
 
@@ -131,6 +146,10 @@ impl ToTokens for BsnPatch {
             }
             BsnPatch::Tuple(tuple) => quote! {
                 (#tuple)
+            }
+            .to_tokens(tokens),
+            BsnPatch::Expr(expr) => quote! {
+                CloneOnPatch::new(#expr)
             }
             .to_tokens(tokens),
         }
