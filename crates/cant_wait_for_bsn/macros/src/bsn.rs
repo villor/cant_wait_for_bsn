@@ -60,7 +60,7 @@ impl ToTokens for BsnEntity {
 pub enum BsnPatch {
     Patch(Path, Vec<(Member, BsnProp)>),
     Tuple(Punctuated<BsnPatch, Token![,]>),
-    // Expr(Expr),
+    //Expr(Expr),
 }
 
 impl Parse for BsnPatch {

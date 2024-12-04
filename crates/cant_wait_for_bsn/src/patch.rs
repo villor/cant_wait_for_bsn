@@ -12,15 +12,38 @@ pub trait Patch: Send + Sync + 'static {
     fn patch(&mut self, props: &mut <Self::Construct as Construct>::Props);
 }
 
+// impl Patch for () {
+//     type Construct = ();
+//     fn patch(&mut self, _props: &mut <Self::Construct as Construct>::Props) {}
+// }
+
+// impl<P: Patch> Patch for (P,) {
+//     type Construct = P::Construct;
+
+/// Used to aid tuple implementations for [`Patch`].
+#[derive(Bundle, Deref, DerefMut)]
+pub struct PatchTupleConstruct<C: Bundle + Send + Sync>(C);
+
 // Tuple impls
 macro_rules! impl_patch_for_tuple {
     ($(#[$meta:meta])* $(($T:ident, $t:ident)),*) => {
         $(#[$meta])*
-        impl<$($T: Patch),*> Patch for ($($T,)*)
-        where
-            ($($T::Construct,)*): Construct<Props = ($(<$T::Construct as Construct>::Props,)*),>,
-        {
-            type Construct = ($($T::Construct,)*);
+        impl<$($T: Construct + Bundle),*> Construct for PatchTupleConstruct<($($T,)*)> {
+            type Props = ($(<$T as Construct>::Props,)*);
+
+            fn construct(
+                _context: &mut ConstructContext,
+                props: Self::Props,
+            ) -> Result<Self, ConstructError> {
+                let ($($t,)*) = props;
+                $(let $t = $T::construct(_context, $t)?;)*
+                Ok(Self(($($t,)*)))
+            }
+        }
+
+        $(#[$meta])*
+        impl<$($T: Patch),*> Patch for ($($T,)*) {
+            type Construct = PatchTupleConstruct<($($T::Construct,)*)>;
 
             #[allow(non_snake_case)]
             fn patch(&mut self, props: &mut <Self::Construct as Construct>::Props) {
@@ -47,10 +70,8 @@ pub struct ConstructPatch<C: Construct, F> {
     _marker: PhantomData<C>,
 }
 
-impl<
-        C: Construct + Sync + Send + 'static + Bundle,
-        F: FnMut(&mut C::Props) + Sync + Send + 'static,
-    > Patch for ConstructPatch<C, F>
+impl<C: Construct + Bundle, F: FnMut(&mut C::Props) + Sync + Send + 'static> Patch
+    for ConstructPatch<C, F>
 {
     type Construct = C;
     fn patch(&mut self, props: &mut <Self::Construct as Construct>::Props) {
@@ -77,6 +98,29 @@ pub trait ConstructPatchExt {
 impl<C: Construct> ConstructPatchExt for C {
     type C = C;
 }
+
+/// Cloned patch. Wraps a value that will be cloned on patch to overwrite the props.
+// pub struct ClonedPatch<T: Construct + Bundle>(T::Props);
+
+// impl<T: Construct + Bundle> ClonedPatch<T>
+// where
+//     T: Construct<Props = T>,
+// {
+//     /// Construct a [`ClonedPatch`]. Only works for types where the construct and props have the same type.
+//     pub fn new(props: T) -> Self {
+//         Self(props)
+//     }
+// }
+
+// impl<T: Construct + Bundle> Patch for ClonedPatch<T>
+// where
+//     <T as Construct>::Props: Sync + Send,
+// {
+//     type Construct = T;
+//     fn patch(&mut self, props: &mut <Self::Construct as Construct>::Props) {
+//         *props = self.0.clone();
+//     }
+// }
 
 /// Extension trait implementing patch utilities for [`ConstructContext`].
 pub trait ConstructContextPatchExt {

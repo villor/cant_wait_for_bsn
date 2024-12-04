@@ -13,7 +13,7 @@ fn main() {
         .run();
 }
 
-#[derive(Component, Construct)]
+#[derive(Component, Default, Clone)]
 struct Health {
     current: i32,
     max: i32,
@@ -44,6 +44,22 @@ fn setup(mut commands: Commands) {
     // UI root
     commands.spawn_scene(ui());
 }
+
+//fn player(name: &'static str) -> impl Scene {
+// bsn! {(
+//     //Name::new(name),
+//     Health {
+//         current: 2000,
+//         max: 2000,
+//     },
+//     Node
+// )}
+// EntityPatch {
+//     patch: (ClonedPatch::new(Name::new("test"))),
+//     children: (),
+// }
+//TODO: Make the above work. We want to be able to use expressions in place of bundles.
+//}
 
 fn ui() -> impl Scene {
     bsn! {
