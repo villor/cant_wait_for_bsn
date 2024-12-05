@@ -9,6 +9,8 @@ use syn::{
     Expr, Member, Path, Result, Token,
 };
 
+// TODO: Support inheriting children
+
 // TODO: Better rust-analyzer support
 
 // TODO: Support nested constructs? E.g:
@@ -173,9 +175,7 @@ impl ToTokens for BsnPatch {
                 })
             },
             BsnPatch::Inherit(path, params) => quote! {
-                #cant_wait_for_bsn::InheritScene::patch(move |props| {
-                    *props = Some(std::sync::Arc::new(std::sync::RwLock::new(#path (#params))));
-                })
+                #path (#params).unpack().0
             },
         }
         .to_tokens(tokens);

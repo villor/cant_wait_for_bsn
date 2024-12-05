@@ -46,20 +46,19 @@ fn setup(mut commands: Commands) {
 fn player(name: &'static str) -> impl Scene {
     bsn! {(
         {Name::new(name)},
-        // Health {
-        //     current: 2000,
-        // },
-        :health(500, 3000),
+        Health {
+            current: 2000,
+        },
+        :max_health(3000),
     )}
 }
 
-fn health(current: i32, max: i32) -> impl Scene {
-    bsn! {
+fn max_health(max: i32) -> impl Scene {
+    bsn! {(
         Health {
-            current: current,
             max: max,
-        }
-    }
+        },
+    )}
 }
 
 fn ui() -> impl Scene {

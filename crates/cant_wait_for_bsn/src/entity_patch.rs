@@ -1,20 +1,18 @@
-use alloc::sync::Arc;
-use std::sync::RwLock;
-
 use bevy::{
     prelude::{
-        BuildChildren, ChildBuild, ChildBuilder, Commands, Component, Entity, EntityCommand,
-        EntityCommands, World,
+        BuildChildren, ChildBuild, ChildBuilder, Commands, Entity, EntityCommand, EntityCommands,
+        World,
     },
     utils::all_tuples,
 };
 
-use crate::{Construct, ConstructContext, ConstructContextPatchExt, ConstructError, Patch};
+use crate::{ConstructContext, ConstructContextPatchExt, ConstructError, Patch};
 
 // TODO: EntityPatch/Scene should be consumed when constructed/spawned, no?
 
 /// Represents a tree of entities and patches to be applied to them.
 pub struct EntityPatch<P: Patch, C: EntityPatchChildren> {
+    // Inherited patches
     // pub inherit: I,
     /// Patch that will be constructed and inserted as a bundle on this entity.
     pub patch: P,
@@ -25,10 +23,9 @@ pub struct EntityPatch<P: Patch, C: EntityPatchChildren> {
 impl<P: Patch, C: EntityPatchChildren> EntityPatch<P, C> {
     /// Constructs an [`EntityPatch`], inserts the components to the context entity, and recursively spawns children.
     fn construct(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
+        // TODO: Patches of the same type has to be combined before constructing
+        // Maybe dynamics is the way after all...
         let bundle = context.construct_from_patch(&mut self.patch)?;
-
-        // TODO: Need to support partial patching here, not just inserting a whole bundle
-
         context.world.entity_mut(context.id).insert(bundle);
 
         self.children.spawn(context)?;
@@ -72,7 +69,7 @@ impl<P: Patch, C: EntityPatchChildren> EntityPatchChildren for EntityPatch<P, C>
 macro_rules! impl_entity_patch_children_tuple {
     ($(#[$meta:meta])* $(($P:ident, $C:ident, $e:ident)),*) => {
         $(#[$meta])*
-        impl<$($P: Patch),*,$($C: EntityPatchChildren),*> EntityPatchChildren
+        impl<$($P: Patch),*, $($C: EntityPatchChildren),*> EntityPatchChildren
             for ($(EntityPatch<$P, $C>,)*)
         {
             fn spawn(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
@@ -172,6 +169,9 @@ pub trait Scene {
 
     /// Constructs and spawns a [`Scene`] as a child under the context entity recursively.
     fn spawn(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError>;
+
+    /// Unpacks the patch and children of the scene, to use for inheritance.
+    fn unpack(self) -> (impl Patch, impl EntityPatchChildren);
 }
 
 impl<P: Patch, C: EntityPatchChildren> Scene for EntityPatch<P, C> {
@@ -182,36 +182,9 @@ impl<P: Patch, C: EntityPatchChildren> Scene for EntityPatch<P, C> {
     fn spawn(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
         self.spawn(context)
     }
-}
 
-impl Scene for () {
-    fn construct(&mut self, _context: &mut ConstructContext) -> Result<(), ConstructError> {
-        Ok(())
-    }
-
-    fn spawn(&mut self, _context: &mut ConstructContext) -> Result<(), ConstructError> {
-        Ok(())
-    }
-}
-
-/// A scene to be inherited by the context scene.
-///
-/// TODO: Hacky locking implementation, implement real dynamic patches/scenes instead.
-#[derive(Component, Clone)]
-pub struct InheritScene;
-
-impl Construct for InheritScene {
-    type Props = Option<Arc<RwLock<dyn Scene + Send + Sync>>>;
-
-    fn construct(
-        context: &mut ConstructContext,
-        props: Self::Props,
-    ) -> Result<Self, ConstructError> {
-        bevy::log::info!("Inheriting scene");
-        if let Some(scene) = props {
-            scene.write().expect("poisoned lock").construct(context)?;
-        }
-        Ok(Self)
+    fn unpack(self) -> (impl Patch, impl EntityPatchChildren) {
+        (self.patch, self.children)
     }
 }
 
