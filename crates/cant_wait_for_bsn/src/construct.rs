@@ -1,6 +1,6 @@
 //! Based on implementation from [bevy_asky](https://github.com/shanecelis/bevy_asky/blob/main/src/construct.rs).
 use alloc::borrow::Cow;
-use bevy::{ecs::system::EntityCommands, prelude::*};
+use bevy::{ecs::system::EntityCommands, prelude::*, utils::all_tuples};
 use thiserror::Error;
 
 /// Construction error
@@ -145,3 +145,37 @@ impl<'w> ConstructExt for EntityCommands<'w> {
         self.reborrow()
     }
 }
+
+/// Allows construction of the inner [`Bundle`], producing a [`Bundle`].
+///
+/// Implements [`Construct`] for tuples of [`Construct`] + [`Bundle`], where the props are the tuple of the inner props.
+#[derive(Bundle, Deref, DerefMut)]
+pub struct BundleConstruct<C: Bundle>(C);
+
+// Tuple impls
+macro_rules! impl_bundle_construct_tuple {
+    ($(#[$meta:meta])* $(($T:ident, $t:ident)),*) => {
+        $(#[$meta])*
+        impl<$($T: Construct + Bundle),*> Construct for BundleConstruct<($($T,)*)> {
+            type Props = ($(<$T as Construct>::Props,)*);
+
+            fn construct(
+                _context: &mut ConstructContext,
+                props: Self::Props,
+            ) -> Result<Self, ConstructError> {
+                let ($($t,)*) = props;
+                $(let $t = $T::construct(_context, $t)?;)*
+                Ok(Self(($($t,)*)))
+            }
+        }
+    };
+}
+
+all_tuples!(
+    #[doc(fake_variadic)]
+    impl_bundle_construct_tuple,
+    0,
+    12,
+    T,
+    t
+);

@@ -2,7 +2,7 @@
 use bevy::{prelude::*, utils::all_tuples};
 use core::marker::PhantomData;
 
-use crate::construct::{Construct, ConstructContext, ConstructError};
+use crate::{BundleConstruct, Construct, ConstructContext, ConstructError};
 
 /// Modifies properties
 pub trait Patch: Send + Sync + 'static {
@@ -12,38 +12,12 @@ pub trait Patch: Send + Sync + 'static {
     fn patch(&mut self, props: &mut <Self::Construct as Construct>::Props);
 }
 
-// impl Patch for () {
-//     type Construct = ();
-//     fn patch(&mut self, _props: &mut <Self::Construct as Construct>::Props) {}
-// }
-
-// impl<P: Patch> Patch for (P,) {
-//     type Construct = P::Construct;
-
-/// Used to aid tuple implementations for [`Patch`].
-#[derive(Bundle, Deref, DerefMut)]
-pub struct PatchTupleConstruct<C: Bundle + Send + Sync>(C);
-
 // Tuple impls
 macro_rules! impl_patch_for_tuple {
     ($(#[$meta:meta])* $(($T:ident, $t:ident)),*) => {
         $(#[$meta])*
-        impl<$($T: Construct + Bundle),*> Construct for PatchTupleConstruct<($($T,)*)> {
-            type Props = ($(<$T as Construct>::Props,)*);
-
-            fn construct(
-                _context: &mut ConstructContext,
-                props: Self::Props,
-            ) -> Result<Self, ConstructError> {
-                let ($($t,)*) = props;
-                $(let $t = $T::construct(_context, $t)?;)*
-                Ok(Self(($($t,)*)))
-            }
-        }
-
-        $(#[$meta])*
         impl<$($T: Patch),*> Patch for ($($T,)*) {
-            type Construct = PatchTupleConstruct<($($T::Construct,)*)>;
+            type Construct = BundleConstruct<($($T::Construct,)*)>;
 
             #[allow(non_snake_case)]
             fn patch(&mut self, props: &mut <Self::Construct as Construct>::Props) {
@@ -70,7 +44,23 @@ pub struct ConstructPatch<C: Construct, F> {
     _marker: PhantomData<C>,
 }
 
-impl<C: Construct + Bundle, F: FnMut(&mut C::Props) + Sync + Send + 'static> Patch
+impl<C, F> ConstructPatch<C, F>
+where
+    C: Construct<Props = C>,
+    F: FnMut(&mut C) + Sync + Send + 'static,
+{
+    /// Allows inferring the type of a bsn expression.
+    ///
+    /// Only works for types where the construct and props have the same type, as the [`Construct`] type cannot be inferred from props otherwise.
+    pub fn new_inferred(func: F) -> Self {
+        Self {
+            func,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<C: Construct + Clone + Bundle, F: FnMut(&mut C::Props) + Clone + Sync + Send + 'static> Patch
     for ConstructPatch<C, F>
 {
     type Construct = C;
@@ -97,33 +87,6 @@ pub trait ConstructPatchExt {
 
 impl<C: Construct> ConstructPatchExt for C {
     type C = C;
-}
-
-/// Wraps props that will be cloned on patch to overwrite the passed props.
-///
-/// Main reason for existing is to support function calls and expression in bsn, where the compiler can infer the type.
-pub struct CloneOnPatch<T: Construct + Bundle>(T::Props);
-
-impl<T: Construct + Bundle> CloneOnPatch<T>
-where
-    T: Construct<Props = T>,
-{
-    /// Construct a [`CloneOnPatch`].
-    ///
-    /// Only works for types where the construct and props have the same type, as the [`Construct`] type cannot be inferred from props otherwise.
-    pub fn new(props: T) -> Self {
-        Self(props)
-    }
-}
-
-impl<T: Construct + Bundle> Patch for CloneOnPatch<T>
-where
-    <T as Construct>::Props: Sync + Send,
-{
-    type Construct = T;
-    fn patch(&mut self, props: &mut <Self::Construct as Construct>::Props) {
-        *props = self.0.clone();
-    }
 }
 
 /// Extension trait implementing patch utilities for [`ConstructContext`].

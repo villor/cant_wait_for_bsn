@@ -45,6 +45,7 @@ thiserror = { version = "2" }
 bevy = { workspace = true }
 thiserror = { workspace = true }
 cant_wait_for_bsn = { path = "crates/cant_wait_for_bsn" }
+bevy-inspector-egui = "0.28"
 
 [lints]
 workspace = true

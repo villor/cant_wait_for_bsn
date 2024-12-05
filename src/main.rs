@@ -3,11 +3,13 @@ use bevy::{
     color::palettes::{css::WHITE, tailwind::*},
     prelude::*,
 };
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use cant_wait_for_bsn::{Scene, *};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(WorldInspectorPlugin::new())
         .add_systems(Startup, setup)
         .add_systems(Update, game_health_update)
         .run();
@@ -44,11 +46,20 @@ fn setup(mut commands: Commands) {
 fn player(name: &'static str) -> impl Scene {
     bsn! {(
         {Name::new(name)},
-        Health {
-            current: 2000,
-            max: 2000,
-        },
+        // Health {
+        //     current: 2000,
+        // },
+        :health(500, 3000),
     )}
+}
+
+fn health(current: i32, max: i32) -> impl Scene {
+    bsn! {
+        Health {
+            current: current,
+            max: max,
+        }
+    }
 }
 
 fn ui() -> impl Scene {

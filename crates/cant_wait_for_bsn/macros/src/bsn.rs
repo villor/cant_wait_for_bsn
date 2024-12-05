@@ -18,6 +18,7 @@ use syn::{
 //            inner_prop: @"asset.txt",
 //        }
 //    }
+// Might be the reason that braces are required for expressions in the first place.
 
 pub fn bsn(item: TokenStream) -> TokenStream {
     match parse2::<BsnEntity>(item) {
@@ -71,25 +72,41 @@ pub enum BsnPatch {
     Patch(Path, Vec<(Member, BsnProp)>),
     Tuple(Punctuated<BsnPatch, Token![,]>),
     Expr(Expr),
+    Inherit(Path, Punctuated<Expr, Token![,]>),
 }
 
 impl Parse for BsnPatch {
     fn parse(input: ParseStream) -> Result<BsnPatch> {
         // TODO: Flatten tuples recursively?
         if input.peek(Paren) {
+            // Tuple
             let content;
             parenthesized![content in input];
             let tuple = content.parse_terminated(BsnPatch::parse, Token![,])?;
             Ok(BsnPatch::Tuple(tuple))
         } else if input.peek(Brace) {
-            // Treat braced content as expression
+            // Expression
             let content;
             braced![content in input];
             let expr = content.parse::<Expr>()?;
             Ok(BsnPatch::Expr(expr))
+        } else if input.peek(Token![:]) {
+            // Inherit
+            input.parse::<Token![:]>()?;
+            let path = input.parse::<Path>()?;
+
+            // Optional params
+            let params = if input.peek(Paren) {
+                let content;
+                parenthesized![content in input];
+                content.parse_terminated(Expr::parse, Token![,])?
+            } else {
+                Punctuated::new()
+            };
+            Ok(BsnPatch::Inherit(path, params))
         } else {
             // TODO: Maybe also support fallback-to-expression for maybe-structs that don't turn out to be parsable as struct
-            // Another idea is to treat paths where last segment is lowercase (probably function call) as expr by default.
+            // Another idea is to treat paths where last segment is lowercase (probably function call) as expr by default. (bit weird, but should be good a nice DX)
             let path = input.parse::<Path>()?;
 
             let fields = if input.peek(Paren) {
@@ -130,6 +147,10 @@ impl Parse for BsnPatch {
 
 impl ToTokens for BsnPatch {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let cant_wait_for_bsn = syn::Path::from(Ident::new(
+            "cant_wait_for_bsn",
+            proc_macro2::Span::call_site(),
+        ));
         match self {
             BsnPatch::Patch(path, fields) => {
                 let assignments = fields.iter().map(|(member, prop)| {
@@ -142,17 +163,22 @@ impl ToTokens for BsnPatch {
                         #(#assignments)*
                     })
                 }
-                .to_tokens(tokens)
             }
             BsnPatch::Tuple(tuple) => quote! {
                 (#tuple)
-            }
-            .to_tokens(tokens),
+            },
             BsnPatch::Expr(expr) => quote! {
-                CloneOnPatch::new(#expr)
-            }
-            .to_tokens(tokens),
+                #cant_wait_for_bsn::ConstructPatch::new_inferred(move |props| {
+                    *props = #expr;
+                })
+            },
+            BsnPatch::Inherit(path, params) => quote! {
+                #cant_wait_for_bsn::InheritScene::patch(move |props| {
+                    *props = Some(std::sync::Arc::new(std::sync::RwLock::new(#path (#params))));
+                })
+            },
         }
+        .to_tokens(tokens);
     }
 }
 
