@@ -1272,16 +1272,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_ui_experiments2"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy-inspector-egui",
- "cant_wait_for_bsn",
- "thiserror 2.0.3",
-]
-
-[[package]]
 name = "bevy_utils"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1539,8 +1529,8 @@ name = "cant_wait_for_bsn"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy-inspector-egui",
  "cant_wait_for_bsn_macros",
- "downcast-rs",
  "thiserror 2.0.3",
 ]
 

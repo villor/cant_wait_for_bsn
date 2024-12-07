@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::{Construct, ConstructContext, ConstructError};
 
-/// Constructable asset handle (because Handle<T> implements Default in Bevy right now)
+/// Constructable asset handle (because [`Handle<T>`] implements Default in Bevy right now)
 #[derive(Deref, DerefMut, Clone, Reflect)]
 pub struct ConstructHandle<T: Asset>(Handle<T>);
 

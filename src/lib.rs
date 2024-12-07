@@ -1,4 +1,4 @@
-//! `cant_wait_for_bsn`
+//! Naive, incomplete, and hacky implementation of the "Next generation scene proposal" for Bevy.
 
 #![allow(internal_features)]
 #![cfg_attr(any(docsrs, docsrs_dep), feature(rustdoc_internals))]

@@ -1,13 +1,17 @@
 [package]
-name = "bevy_ui_experiments2"
+name = "cant_wait_for_bsn"
 version = "0.1.0"
 edition = "2021"
 
-[workspace]
-resolver = "2"
-members = ["crates/cant_wait_for_bsn"]
+[dependencies]
+bevy = { version = "0.15.0" }
+thiserror = { version = "2" }
+cant_wait_for_bsn_macros = { path = "src/macros", version = "0.1.0" }
 
-[workspace.lints.clippy]
+[dev-dependencies]
+bevy-inspector-egui = "0.28"
+
+[lints.clippy]
 doc_markdown = "warn"
 manual_let_else = "warn"
 match_same_arms = "warn"
@@ -18,37 +22,24 @@ type_complexity = "allow"
 undocumented_unsafe_blocks = "warn"
 unwrap_or_default = "warn"
 needless_lifetimes = "allow"
-
 ptr_as_ptr = "warn"
 ptr_cast_constness = "warn"
 ref_as_ptr = "warn"
-
-# see: https://github.com/bevyengine/bevy/pull/15375#issuecomment-2366966219
 too_long_first_doc_paragraph = "allow"
-
 std_instead_of_core = "warn"
 std_instead_of_alloc = "warn"
 alloc_instead_of_core = "warn"
 
-[workspace.lints.rust]
+[lints.rust]
 missing_docs = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs_dep)'] }
 unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "warn"
 unused_qualifications = "warn"
 
-[workspace.dependencies]
-bevy = { version = "0.15.0" }
-thiserror = { version = "2" }
-
-[dependencies]
-bevy = { workspace = true }
-thiserror = { workspace = true }
-cant_wait_for_bsn = { path = "crates/cant_wait_for_bsn" }
-bevy-inspector-egui = "0.28"
-
-[lints]
-workspace = true
+[package.metadata.docs.rs]
+rustdoc-args = ["-Zunstable-options", "--generate-link-to-definition"]
+all-features = true
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
