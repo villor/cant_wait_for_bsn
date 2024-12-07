@@ -10,7 +10,6 @@ fn main() {
     App::new()
         .register_type::<Health>()
         .register_type::<HealthBar>()
-        .register_type::<HealthBarProps>()
         .add_plugins(DefaultPlugins)
         .add_plugins(WorldInspectorPlugin::new())
         .add_systems(Startup, setup)

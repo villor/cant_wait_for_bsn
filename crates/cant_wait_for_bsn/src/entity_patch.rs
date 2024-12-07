@@ -28,14 +28,11 @@ pub trait Scene: Sized {
         Ok(())
     }
 
-    /// Converts a static scene representation to dynamic by applying the dynamic patches to a [`DynamicScene`] and spawning their children.
-    ///
-    /// This is what powers [`EntityPatch`] inheritance.
-    fn apply_dynamic(
-        self,
-        context: &mut ConstructContext,
-        scene: &mut DynamicScene,
-    ) -> Result<(), ConstructError>;
+    /// Dynamically applies the patches of this scene to a [`DynamicScene`], effectively overwriting any patched props.
+    fn dynamic_patch(&mut self, scene: &mut DynamicScene);
+
+    /// Dynamically patches the scene and pushes it as a child of the [`DynamicScene`].
+    fn dynamic_patch_as_child(&mut self, scene: &mut DynamicScene);
 }
 
 /// Zero or more [`Scene`]es forming a set of children or inherited patches. Implemented for tuples of [`Scene`].
@@ -46,28 +43,23 @@ pub trait SceneTuple {
     /// Recursively constructs/spawns all the entities in the tuple and their descendants under the context entity.
     fn spawn_children(self, context: &mut ConstructContext) -> Result<(), ConstructError>;
 
-    /// Applies each scene in the tuple to the dynamic scene by calling [`Scene::apply_dynamic`].
-    fn apply_dynamic(
-        self,
-        context: &mut ConstructContext,
-        scene: &mut DynamicScene,
-    ) -> Result<(), ConstructError>;
+    /// Applies each scene in the tuple to the dynamic scene by calling [`Scene::dynamic_patch`].
+    fn dynamic_patch(&mut self, scene: &mut DynamicScene);
+
+    /// Pushes the scenes in the tuple as children of the dynamic scene.
+    fn push_dynamic_children(&mut self, scene: &mut DynamicScene);
 }
 
 impl SceneTuple for () {
     const IS_EMPTY: bool = true;
 
-    fn spawn_children(self, _context: &mut ConstructContext) -> Result<(), ConstructError> {
+    fn spawn_children(self, _: &mut ConstructContext) -> Result<(), ConstructError> {
         Ok(())
     }
 
-    fn apply_dynamic(
-        self,
-        _: &mut ConstructContext,
-        _: &mut DynamicScene,
-    ) -> Result<(), ConstructError> {
-        Ok(())
-    }
+    fn dynamic_patch(&mut self, _: &mut DynamicScene) {}
+
+    fn push_dynamic_children(&mut self, _: &mut DynamicScene) {}
 }
 
 // Tuple impls
@@ -84,14 +76,17 @@ macro_rules! impl_scene_tuple {
                 Ok(())
             }
 
-            fn apply_dynamic(
-                self,
-                context: &mut ConstructContext,
+            fn dynamic_patch(
+                &mut self,
                 scene: &mut DynamicScene,
-            ) -> Result<(), ConstructError> {
+            ) {
                 let ($($s,)*) = self;
-                $($s.apply_dynamic(context, scene)?;)*
-                Ok(())
+                $($s.dynamic_patch(scene);)*
+            }
+
+            fn push_dynamic_children(&mut self, scene: &mut DynamicScene) {
+                let ($($s,)*) = self;
+                $($s.dynamic_patch_as_child(scene);)*
             }
         }
     };
@@ -132,9 +127,8 @@ where
         if !I::IS_EMPTY {
             // Dynamic scene
             let mut dynamic_scene = DynamicScene::default();
-            self.apply_dynamic(context, &mut dynamic_scene)?;
+            self.dynamic_patch(&mut dynamic_scene);
             dynamic_scene.construct(context)?;
-            // TODO: Spawn children here instead?
         } else {
             // Static scene
             let bundle = context.construct_from_patch(&mut self.patch)?;
@@ -145,20 +139,22 @@ where
         Ok(())
     }
 
-    fn apply_dynamic(
-        mut self,
-        context: &mut ConstructContext,
-        scene: &mut DynamicScene,
-    ) -> Result<(), ConstructError> {
+    fn dynamic_patch(&mut self, scene: &mut DynamicScene) {
         // Apply the inherited patches
-        self.inherit.apply_dynamic(context, scene)?;
+        self.inherit.dynamic_patch(scene);
 
         // Apply this patch itself
         self.patch.dynamic_patch(scene);
 
-        // Spawn this patches children
-        // TODO: Move this so all children are spawned _after_ the entity is dynamically constructed?
-        self.children.spawn_children(context)
+        // Push the children
+        self.children.push_dynamic_children(scene);
+    }
+
+    /// Dynamically patches the scene and pushes it as a child of the [`DynamicScene`].
+    fn dynamic_patch_as_child(&mut self, parent_scene: &mut DynamicScene) {
+        let mut child_scene = DynamicScene::default();
+        self.dynamic_patch(&mut child_scene);
+        parent_scene.push_child(child_scene);
     }
 }
 
@@ -239,7 +235,7 @@ where
         let mut context = ConstructContext { id, world };
         context
             .construct_entity_patch(self.0)
-            .expect("TODO failed to spawn_entity_patch in ConstructEntityPatchCommand");
+            .expect("failed to spawn_entity_patch in ConstructEntityPatchCommand");
     }
 }
 
@@ -270,7 +266,7 @@ where
         let mut context = ConstructContext { id, world };
         self.0
             .construct(&mut context)
-            .expect("TODO failed to spawn_scene in ConstructSceneCommand");
+            .expect("failed to spawn_scene in ConstructSceneCommand");
     }
 }
 

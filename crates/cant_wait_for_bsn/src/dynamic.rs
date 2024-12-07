@@ -1,7 +1,7 @@
 use core::any::TypeId;
 
 use bevy::{
-    prelude::{AppTypeRegistry, Component, Mut, ReflectComponent},
+    prelude::{AppTypeRegistry, BuildChildren, Component, Mut, ReflectComponent},
     reflect::{PartialReflect, Reflect},
     utils::{all_tuples, TypeIdMap},
 };
@@ -12,7 +12,7 @@ use crate::{
 
 /// Dynamic patch
 pub trait DynamicPatch: Send + Sync + 'static {
-    /// Adds this patch "on top" of the dynamic scene by updating the dynamic patches and (TODO) pushing any dynamic children.
+    /// Adds this patch "on top" of the dynamic scene by updating the dynamic props.
     fn dynamic_patch(&mut self, scene: &mut DynamicScene);
 }
 
@@ -65,19 +65,19 @@ struct DynamicProps {
     props: Box<dyn Reflect>,
 }
 
-/// A dynamic scene containing dynamic patches.
+/// A dynamic scene containing dynamic patches and children.
 #[derive(Default)]
 pub struct DynamicScene {
     component_props: TypeIdMap<DynamicProps>,
-    // children: Vec<DynamicScene>, // TODO: Children are static for now, dynamic children should only be needed for asset loaded scenes?
+    children: Vec<DynamicScene>,
 }
 
 impl DynamicScene {
-    /// Constructs the dynamic patches in the scene and inserts the resulting components onto the context entity.
-    ///
-    /// TODO: Also spawn the children?
+    /// Constructs the dynamic patches in the scene, inserts the resulting components, and spawns children recursively.
     pub fn construct(self, context: &mut ConstructContext) -> Result<(), ConstructError> {
         let id = context.id;
+
+        // Insert components
         context
             .world
             .resource_scope(|world, type_registry: Mut<AppTypeRegistry>| {
@@ -107,6 +107,23 @@ impl DynamicScene {
                 }
 
                 Ok(())
-            })
+            })?;
+
+        // Spawn children
+        for child in self.children {
+            let child_id = context.world.spawn_empty().id();
+            context.world.entity_mut(id).add_child(child_id);
+            child.construct(&mut ConstructContext {
+                id: child_id,
+                world: context.world,
+            })?;
+        }
+
+        Ok(())
+    }
+
+    /// Add a child to the dynamic scene.
+    pub fn push_child(&mut self, child: DynamicScene) {
+        self.children.push(child);
     }
 }
