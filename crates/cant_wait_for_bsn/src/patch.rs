@@ -60,7 +60,7 @@ where
     }
 }
 
-impl<C: Construct + Clone + Bundle, F: FnMut(&mut C::Props) + Clone + Sync + Send + 'static> Patch
+impl<C: Construct + Bundle, F: FnMut(&mut C::Props) + Sync + Send + 'static> Patch
     for ConstructPatch<C, F>
 {
     type Construct = C;

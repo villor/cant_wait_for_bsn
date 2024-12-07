@@ -6,35 +6,17 @@ use bevy::{
     utils::all_tuples,
 };
 
-use crate::{ConstructContext, ConstructContextPatchExt, ConstructError, Patch};
+use crate::{
+    ConstructContext, ConstructContextPatchExt, ConstructError, DynamicPatch, DynamicScene, Patch,
+};
 
-// TODO: EntityPatch/Scene should be consumed when constructed/spawned, no?
+/// Convenience trait for [`EntityPatch`].
+pub trait Scene: Sized {
+    /// Constructs a [`Scene`], inserts the components to the context entity, and recursively spawns scene descendants.
+    fn construct(self, context: &mut ConstructContext) -> Result<(), ConstructError>;
 
-/// Represents a tree of entities and patches to be applied to them.
-pub struct EntityPatch<P: Patch, C: EntityPatchChildren> {
-    // Inherited patches
-    // pub inherit: I,
-    /// Patch that will be constructed and inserted as a bundle on this entity.
-    pub patch: P,
-    /// Zero or more [`EntityPatch`]es for the children of this entity.
-    pub children: C,
-}
-
-impl<P: Patch, C: EntityPatchChildren> EntityPatch<P, C> {
-    /// Constructs an [`EntityPatch`], inserts the components to the context entity, and recursively spawns children.
-    fn construct(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
-        // TODO: Patches of the same type has to be combined before constructing
-        // Maybe dynamics is the way after all...
-        let bundle = context.construct_from_patch(&mut self.patch)?;
-        context.world.entity_mut(context.id).insert(bundle);
-
-        self.children.spawn(context)?;
-
-        Ok(())
-    }
-
-    /// Constructs and spawns an [`EntityPatch`] as a child under the context entity recursively.
-    fn spawn(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
+    /// Constructs and spawns a [`Scene`] as a child under the context entity recursively.
+    fn spawn(self, context: &mut ConstructContext) -> Result<(), ConstructError> {
         let id = context.world.spawn_empty().id();
         context.world.entity_mut(context.id).add_child(id);
 
@@ -45,36 +27,70 @@ impl<P: Patch, C: EntityPatchChildren> EntityPatch<P, C> {
 
         Ok(())
     }
+
+    /// Converts a static scene representation to dynamic by applying the dynamic patches to a [`DynamicScene`] and spawning their children.
+    ///
+    /// This is what powers [`EntityPatch`] inheritance.
+    fn apply_dynamic(
+        self,
+        context: &mut ConstructContext,
+        scene: &mut DynamicScene,
+    ) -> Result<(), ConstructError>;
 }
 
-/// Zero or more [`EntityPatch`]es forming a set of children. Implemented for tuples of [`EntityPatch`].
-pub trait EntityPatchChildren {
-    /// Recursively constructs/spawns all the children and their descendant patches.
-    fn spawn(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError>;
+/// Zero or more [`Scene`]es forming a set of children or inherited patches. Implemented for tuples of [`Scene`].
+pub trait SceneTuple {
+    /// Whether this is an empty tuple
+    const IS_EMPTY: bool;
+
+    /// Recursively constructs/spawns all the entities in the tuple and their descendants under the context entity.
+    fn spawn_children(self, context: &mut ConstructContext) -> Result<(), ConstructError>;
+
+    /// Applies each scene in the tuple to the dynamic scene by calling [`Scene::apply_dynamic`].
+    fn apply_dynamic(
+        self,
+        context: &mut ConstructContext,
+        scene: &mut DynamicScene,
+    ) -> Result<(), ConstructError>;
 }
 
-impl EntityPatchChildren for () {
-    fn spawn(&mut self, _context: &mut ConstructContext) -> Result<(), ConstructError> {
+impl SceneTuple for () {
+    const IS_EMPTY: bool = true;
+
+    fn spawn_children(self, _context: &mut ConstructContext) -> Result<(), ConstructError> {
+        Ok(())
+    }
+
+    fn apply_dynamic(
+        self,
+        _: &mut ConstructContext,
+        _: &mut DynamicScene,
+    ) -> Result<(), ConstructError> {
         Ok(())
     }
 }
 
-impl<P: Patch, C: EntityPatchChildren> EntityPatchChildren for EntityPatch<P, C> {
-    fn spawn(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
-        self.spawn(context)
-    }
-}
-
 // Tuple impls
-macro_rules! impl_entity_patch_children_tuple {
-    ($(#[$meta:meta])* $(($P:ident, $C:ident, $e:ident)),*) => {
+macro_rules! impl_scene_tuple {
+    ($(#[$meta:meta])* $(($S:ident, $s:ident)),*) => {
         $(#[$meta])*
-        impl<$($P: Patch),*, $($C: EntityPatchChildren),*> EntityPatchChildren
-            for ($(EntityPatch<$P, $C>,)*)
+        impl<$($S: Scene),*> SceneTuple for ($($S,)*)
         {
-            fn spawn(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
-                let ($($e,)*) = self;
-                $($e.spawn(context)?;)*
+            const IS_EMPTY: bool = false;
+
+            fn spawn_children(self, context: &mut ConstructContext) -> Result<(), ConstructError> {
+                let ($($s,)*) = self;
+                $($s.spawn(context)?;)*
+                Ok(())
+            }
+
+            fn apply_dynamic(
+                self,
+                context: &mut ConstructContext,
+                scene: &mut DynamicScene,
+            ) -> Result<(), ConstructError> {
+                let ($($s,)*) = self;
+                $($s.apply_dynamic(context, scene)?;)*
                 Ok(())
             }
         }
@@ -83,42 +99,115 @@ macro_rules! impl_entity_patch_children_tuple {
 
 all_tuples!(
     #[doc(fake_variadic)]
-    impl_entity_patch_children_tuple,
+    impl_scene_tuple,
     1,
     12,
-    P,
-    C,
-    e
+    S,
+    s
 );
+
+/// Represents a tree of entities and patches to be applied to them.
+pub struct EntityPatch<I, P, C>
+where
+    I: SceneTuple,
+    P: Patch + DynamicPatch,
+    C: SceneTuple,
+{
+    /// Inherited scenes.
+    pub inherit: I,
+    /// Patch that will be constructed and inserted on this entity.
+    pub patch: P,
+    /// Child scenes of this entity.
+    pub children: C,
+}
+
+impl<I, P, C> Scene for EntityPatch<I, P, C>
+where
+    I: SceneTuple,
+    P: Patch + DynamicPatch,
+    C: SceneTuple,
+{
+    /// Constructs an [`EntityPatch`], inserts the resulting bundle to the context entity, and recursively spawns children.
+    fn construct(mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
+        if !I::IS_EMPTY {
+            // Dynamic scene
+            let mut dynamic_scene = DynamicScene::default();
+            self.apply_dynamic(context, &mut dynamic_scene)?;
+            dynamic_scene.construct(context)?;
+            // TODO: Spawn children here instead?
+        } else {
+            // Static scene
+            let bundle = context.construct_from_patch(&mut self.patch)?;
+            context.world.entity_mut(context.id).insert(bundle);
+            self.children.spawn_children(context)?;
+        }
+
+        Ok(())
+    }
+
+    fn apply_dynamic(
+        mut self,
+        context: &mut ConstructContext,
+        scene: &mut DynamicScene,
+    ) -> Result<(), ConstructError> {
+        // Apply the inherited patches
+        self.inherit.apply_dynamic(context, scene)?;
+
+        // Apply this patch itself
+        self.patch.dynamic_patch(scene);
+
+        // Spawn this patches children
+        // TODO: Move this so all children are spawned _after_ the entity is dynamically constructed?
+        self.children.spawn_children(context)
+    }
+}
 
 /// Extension trait implementing [`EntityPatch`] utilities for [`ConstructContext`].
 pub trait ConstructContextEntityPatchExt {
     /// Constructs an [`EntityPatch`], inserts the components to the context entity, and recursively spawns the descendants.
-    fn construct_entity_patch<P: Patch, C: EntityPatchChildren>(
+    fn construct_entity_patch<I, P, C>(
         &mut self,
-        entity_patch: EntityPatch<P, C>,
-    ) -> Result<&mut Self, ConstructError>;
+        entity_patch: EntityPatch<I, P, C>,
+    ) -> Result<&mut Self, ConstructError>
+    where
+        I: SceneTuple,
+        P: Patch + DynamicPatch,
+        C: SceneTuple;
 
     /// Spawns an [`EntityPatch`] under the context entity recursively.
-    fn spawn_entity_patch<P: Patch, C: EntityPatchChildren>(
+    fn spawn_entity_patch<I, P, C>(
         &mut self,
-        entity_patch: EntityPatch<P, C>,
-    ) -> Result<&mut Self, ConstructError>;
+        entity_patch: EntityPatch<I, P, C>,
+    ) -> Result<&mut Self, ConstructError>
+    where
+        I: SceneTuple,
+        P: Patch + DynamicPatch,
+        C: SceneTuple;
 }
 
 impl<'a> ConstructContextEntityPatchExt for ConstructContext<'a> {
-    fn construct_entity_patch<P: Patch, C: EntityPatchChildren>(
+    fn construct_entity_patch<I, P, C>(
         &mut self,
-        mut entity_patch: EntityPatch<P, C>,
-    ) -> Result<&mut Self, ConstructError> {
+        entity_patch: EntityPatch<I, P, C>,
+    ) -> Result<&mut Self, ConstructError>
+    where
+        I: SceneTuple,
+        P: Patch + DynamicPatch,
+        C: SceneTuple,
+    {
         entity_patch.construct(self)?;
         Ok(self)
     }
 
-    fn spawn_entity_patch<P: Patch, C: EntityPatchChildren>(
+    fn spawn_entity_patch<I, P, C>(
         &mut self,
-        mut entity_patch: EntityPatch<P, C>,
-    ) -> Result<&mut Self, ConstructError> {
+        entity_patch: EntityPatch<I, P, C>,
+    ) -> Result<&mut Self, ConstructError>
+    where
+        I: SceneTuple,
+        P: Patch + DynamicPatch,
+        C: SceneTuple,
+    {
         entity_patch.spawn(self)?;
         Ok(self)
     }
@@ -127,21 +216,24 @@ impl<'a> ConstructContextEntityPatchExt for ConstructContext<'a> {
 /// Extension trait implementing [`EntityPatch`] utilities for [`EntityCommands`].
 pub trait EntityCommandsEntityPatchExt {
     /// Constructs an [`EntityPatch`] and applies it to the entity.
-    fn construct_patch<P, C>(&mut self, entity_patch: EntityPatch<P, C>) -> EntityCommands
+    fn construct_patch<I, P, C>(&mut self, entity_patch: EntityPatch<I, P, C>) -> EntityCommands
     where
-        P: Patch + Send + 'static,
-        C: EntityPatchChildren + Send + 'static;
+        I: SceneTuple + Send + 'static,
+        P: Patch + DynamicPatch + Send + 'static,
+        C: SceneTuple + Send + 'static;
 }
 
-struct ConstructEntityPatchCommand<P, C>(EntityPatch<P, C>)
+struct ConstructEntityPatchCommand<I, P, C>(EntityPatch<I, P, C>)
 where
-    P: Patch + Send + 'static,
-    C: EntityPatchChildren + Send + 'static;
+    I: SceneTuple + Send + 'static,
+    P: Patch + DynamicPatch + Send + 'static,
+    C: SceneTuple + Send + 'static;
 
-impl<P, C> EntityCommand for ConstructEntityPatchCommand<P, C>
+impl<I, P, C> EntityCommand for ConstructEntityPatchCommand<I, P, C>
 where
-    P: Patch + Send + 'static,
-    C: EntityPatchChildren + Send + 'static,
+    I: SceneTuple + Send + 'static,
+    P: Patch + DynamicPatch + Send + 'static,
+    C: SceneTuple + Send + 'static,
 {
     fn apply(self, id: Entity, world: &mut World) {
         let mut context = ConstructContext { id, world };
@@ -153,38 +245,16 @@ where
 
 impl<'w> EntityCommandsEntityPatchExt for EntityCommands<'w> {
     // type Out = EntityCommands;
-    fn construct_patch<P: Patch + Send + 'static, C: EntityPatchChildren + Send + 'static>(
+    fn construct_patch<
+        I: SceneTuple + Send + 'static,
+        P: Patch + DynamicPatch + Send + 'static,
+        C: SceneTuple + Send + 'static,
+    >(
         &mut self,
-        entity_patch: EntityPatch<P, C>,
+        entity_patch: EntityPatch<I, P, C>,
     ) -> EntityCommands {
         self.queue(ConstructEntityPatchCommand(entity_patch));
         self.reborrow()
-    }
-}
-
-/// Convenience trait for [`EntityPatch`].
-pub trait Scene {
-    /// Constructs a [`Scene`], inserts the components to the context entity, and recursively spawns scene descendants.
-    fn construct(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError>;
-
-    /// Constructs and spawns a [`Scene`] as a child under the context entity recursively.
-    fn spawn(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError>;
-
-    /// Unpacks the patch and children of the scene, to use for inheritance.
-    fn unpack(self) -> (impl Patch, impl EntityPatchChildren);
-}
-
-impl<P: Patch, C: EntityPatchChildren> Scene for EntityPatch<P, C> {
-    fn construct(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
-        self.construct(context)
-    }
-
-    fn spawn(&mut self, context: &mut ConstructContext) -> Result<(), ConstructError> {
-        self.spawn(context)
-    }
-
-    fn unpack(self) -> (impl Patch, impl EntityPatchChildren) {
-        (self.patch, self.children)
     }
 }
 
@@ -196,7 +266,7 @@ impl<S> EntityCommand for ConstructSceneCommand<S>
 where
     S: Scene + Send + 'static,
 {
-    fn apply(mut self, id: Entity, world: &mut World) {
+    fn apply(self, id: Entity, world: &mut World) {
         let mut context = ConstructContext { id, world };
         self.0
             .construct(&mut context)

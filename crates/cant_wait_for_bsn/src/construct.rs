@@ -21,7 +21,7 @@ pub enum ConstructError {
 }
 
 /// Construct property
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub enum ConstructProp<T: Construct> {
     /// Direct Value
     Value(T),

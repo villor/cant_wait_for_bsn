@@ -8,6 +8,9 @@ use cant_wait_for_bsn::{Scene, *};
 
 fn main() {
     App::new()
+        .register_type::<Health>()
+        .register_type::<HealthBar>()
+        .register_type::<HealthBarProps>()
         .add_plugins(DefaultPlugins)
         .add_plugins(WorldInspectorPlugin::new())
         .add_systems(Startup, setup)
@@ -15,7 +18,8 @@ fn main() {
         .run();
 }
 
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default, Clone, Reflect)]
+#[reflect(Component)]
 struct Health {
     current: i32,
     max: i32,
@@ -76,13 +80,14 @@ fn ui() -> impl Scene {
     }
 }
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Reflect)]
+#[reflect(Component)]
 struct HealthBar {
     player_entity: ConstructEntity,
 }
 
 #[allow(missing_docs)]
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub struct HealthBarProps {
     player_entity: ConstructProp<ConstructEntity>,
 }

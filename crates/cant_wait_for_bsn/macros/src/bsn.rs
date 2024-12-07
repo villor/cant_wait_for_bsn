@@ -9,8 +9,6 @@ use syn::{
     Expr, Member, Path, Result, Token,
 };
 
-// TODO: Support inheriting children
-
 // TODO: Better rust-analyzer support
 
 // TODO: Support nested constructs? E.g:
@@ -30,13 +28,54 @@ pub fn bsn(item: TokenStream) -> TokenStream {
 }
 
 pub struct BsnEntity {
+    pub inherits: Punctuated<BsnInherit, Token![,]>,
     pub patch: BsnPatch,
     pub children: Punctuated<BsnEntity, Token![,]>,
 }
 
 impl Parse for BsnEntity {
     fn parse(input: ParseStream) -> Result<Self> {
-        let patch = BsnPatch::parse(input)?;
+        let mut inherits = Punctuated::new();
+        let patch;
+        if input.peek(Paren) {
+            let content;
+            parenthesized![content in input];
+
+            let mut patch_tuple = Punctuated::new();
+
+            loop {
+                if content.is_empty() {
+                    break;
+                }
+
+                if content.peek(Token![:]) {
+                    content.parse::<Token![:]>()?;
+                    inherits = content.parse_terminated(BsnInherit::parse, Token![,])?;
+                    break;
+                }
+
+                let patch = content.parse::<BsnPatch>()?;
+                patch_tuple.push_value(patch);
+                if content.is_empty() {
+                    break;
+                }
+
+                if content.peek(Token![:]) || (content.peek(Token![,]) && content.peek2(Token![:]))
+                {
+                    content.parse::<Token![,]>().ok();
+                    content.parse::<Token![:]>()?;
+                    inherits = content.parse_terminated(BsnInherit::parse, Token![,])?;
+                    break;
+                }
+
+                let punct = content.parse()?;
+                patch_tuple.push_punct(punct);
+            }
+
+            patch = BsnPatch::Tuple(patch_tuple);
+        } else {
+            patch = BsnPatch::parse(input)?;
+        }
 
         let children = if input.peek(token::Bracket) {
             let content;
@@ -46,7 +85,11 @@ impl Parse for BsnEntity {
             Punctuated::new()
         };
 
-        Ok(Self { patch, children })
+        Ok(Self {
+            inherits,
+            patch,
+            children,
+        })
     }
 }
 
@@ -57,10 +100,11 @@ impl ToTokens for BsnEntity {
             proc_macro2::Span::call_site(),
         ));
         let patch = &self.patch;
+        let inherits = self.inherits.iter();
         let children = self.children.iter();
         quote! {
             #cant_wait_for_bsn::EntityPatch {
-                // inherit: (),
+                inherit: (#(#inherits,)*),
                 patch: #patch,
                 children: (#(#children,)*),
             }
@@ -74,7 +118,6 @@ pub enum BsnPatch {
     Patch(Path, Vec<(Member, BsnProp)>),
     Tuple(Punctuated<BsnPatch, Token![,]>),
     Expr(Expr),
-    Inherit(Path, Punctuated<Expr, Token![,]>),
 }
 
 impl Parse for BsnPatch {
@@ -92,20 +135,6 @@ impl Parse for BsnPatch {
             braced![content in input];
             let expr = content.parse::<Expr>()?;
             Ok(BsnPatch::Expr(expr))
-        } else if input.peek(Token![:]) {
-            // Inherit
-            input.parse::<Token![:]>()?;
-            let path = input.parse::<Path>()?;
-
-            // Optional params
-            let params = if input.peek(Paren) {
-                let content;
-                parenthesized![content in input];
-                content.parse_terminated(Expr::parse, Token![,])?
-            } else {
-                Punctuated::new()
-            };
-            Ok(BsnPatch::Inherit(path, params))
         } else {
             // TODO: Maybe also support fallback-to-expression for maybe-structs that don't turn out to be parsable as struct
             // Another idea is to treat paths where last segment is lowercase (probably function call) as expr by default. (bit weird, but should be good a nice DX)
@@ -174,9 +203,6 @@ impl ToTokens for BsnPatch {
                     *props = #expr;
                 })
             },
-            BsnPatch::Inherit(path, params) => quote! {
-                #path (#params).unpack().0
-            },
         }
         .to_tokens(tokens);
     }
@@ -212,6 +238,35 @@ impl ToTokens for BsnProp {
             BsnProp::Prop(expr) => quote! {
                 #cant_wait_for_bsn::ConstructProp::Prop((#expr).into())
             },
+        }
+        .to_tokens(tokens);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BsnInherit(Path, Punctuated<Expr, Token![,]>);
+
+impl Parse for BsnInherit {
+    fn parse(input: ParseStream) -> Result<BsnInherit> {
+        let path = input.parse::<Path>()?;
+
+        // Optional params
+        let params = if input.peek(Paren) {
+            let content;
+            parenthesized![content in input];
+            content.parse_terminated(Expr::parse, Token![,])?
+        } else {
+            Punctuated::new()
+        };
+        Ok(BsnInherit(path, params))
+    }
+}
+
+impl ToTokens for BsnInherit {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let BsnInherit(path, params) = &self;
+        quote! {
+            (#path (#params))
         }
         .to_tokens(tokens);
     }

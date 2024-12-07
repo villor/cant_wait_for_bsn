@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::{Construct, ConstructContext, ConstructError};
 
 /// Constructable asset handle (because Handle<T> implements Default in Bevy right now)
-#[derive(Deref, DerefMut, Clone)]
+#[derive(Deref, DerefMut, Clone, Reflect)]
 pub struct ConstructHandle<T: Asset>(Handle<T>);
 
 impl<T: Asset> From<Handle<T>> for ConstructHandle<T> {
@@ -38,7 +38,7 @@ impl<T: Asset> Construct for ConstructHandle<T> {
 }
 
 /// Entity reference constructable using [`EntityPath`], allowing passing either entity name or id as prop.
-#[derive(Deref, DerefMut, Clone)]
+#[derive(Deref, DerefMut, Clone, Reflect)]
 pub struct ConstructEntity(Entity);
 
 impl From<Entity> for ConstructEntity {
@@ -54,7 +54,7 @@ impl From<ConstructEntity> for Entity {
 }
 
 /// The construct prop for [`ConstructEntity`].
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Reflect)]
 pub enum EntityPath {
     /// None
     #[default]
