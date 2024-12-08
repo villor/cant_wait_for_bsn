@@ -16,17 +16,7 @@ pub trait Scene: Sized {
     fn construct(self, context: &mut ConstructContext) -> Result<(), ConstructError>;
 
     /// Constructs and spawns a [`Scene`] as a child under the context entity recursively.
-    fn spawn(self, context: &mut ConstructContext) -> Result<(), ConstructError> {
-        let id = context.world.spawn_empty().id();
-        context.world.entity_mut(context.id).add_child(id);
-
-        self.construct(&mut ConstructContext {
-            id,
-            world: context.world,
-        })?;
-
-        Ok(())
-    }
+    fn spawn(self, context: &mut ConstructContext) -> Result<(), ConstructError>;
 
     /// Dynamically applies the patches of this scene to a [`DynamicScene`], effectively overwriting any patched props.
     fn dynamic_patch(&mut self, scene: &mut DynamicScene);
@@ -135,6 +125,18 @@ where
             context.world.entity_mut(context.id).insert(bundle);
             self.children.spawn_children(context)?;
         }
+
+        Ok(())
+    }
+
+    fn spawn(self, context: &mut ConstructContext) -> Result<(), ConstructError> {
+        let id = context.world.spawn_empty().id();
+        context.world.entity_mut(context.id).add_child(id);
+
+        self.construct(&mut ConstructContext {
+            id,
+            world: context.world,
+        })?;
 
         Ok(())
     }
@@ -273,20 +275,75 @@ where
 /// Scene spawning extension.
 pub trait SpawnSceneExt {
     /// Spawn the given [`Scene`].
-    fn spawn_scene(&mut self, scene: impl Scene + Send + 'static) -> &mut Self;
+    fn spawn_scene(&mut self, scene: impl Scene + Send + 'static) -> EntityCommands;
 }
 
 impl<'w> SpawnSceneExt for Commands<'w, '_> {
     /// Spawn the given [`Scene`].
-    fn spawn_scene(&mut self, scene: impl Scene + Send + 'static) -> &mut Self {
-        self.spawn_empty().queue(ConstructSceneCommand(scene));
-        self
+    fn spawn_scene(&mut self, scene: impl Scene + Send + 'static) -> EntityCommands {
+        let mut entity = self.spawn_empty();
+        entity.queue(ConstructSceneCommand(scene));
+        entity
     }
 }
 
 impl<'w> SpawnSceneExt for ChildBuilder<'w> {
-    fn spawn_scene(&mut self, scene: impl Scene + Send + 'static) -> &mut Self {
-        self.spawn_empty().queue(ConstructSceneCommand(scene));
-        self
+    fn spawn_scene(&mut self, scene: impl Scene + Send + 'static) -> EntityCommands {
+        let mut entity = self.spawn_empty();
+        entity.queue(ConstructSceneCommand(scene));
+        entity
+    }
+}
+
+/// For spawning scene children with an iterator.
+pub struct SceneIter<I> {
+    iter: I,
+}
+
+impl<I> SceneIter<I> {
+    /// Create a new [`SceneIter`] from an iterator of scenes.
+    pub fn new<S>(iter: I) -> Self
+    where
+        I: Iterator<Item = S>,
+        S: Scene,
+    {
+        Self { iter }
+    }
+}
+
+impl<S: Scene, I: Iterator<Item = S>> Scene for SceneIter<I> {
+    fn construct(self, context: &mut ConstructContext) -> Result<(), ConstructError> {
+        for scene in self.iter {
+            scene.construct(context)?;
+        }
+        Ok(())
+    }
+
+    fn spawn(self, context: &mut ConstructContext) -> Result<(), ConstructError> {
+        for scene in self.iter {
+            let id = context.world.spawn_empty().id();
+            context.world.entity_mut(context.id).add_child(id);
+
+            scene.construct(&mut ConstructContext {
+                id,
+                world: context.world,
+            })?;
+        }
+
+        Ok(())
+    }
+
+    fn dynamic_patch(&mut self, dynamic_scene: &mut DynamicScene) {
+        for mut scene in &mut self.iter {
+            scene.dynamic_patch(dynamic_scene);
+        }
+    }
+
+    fn dynamic_patch_as_child(&mut self, dynamic_scene: &mut DynamicScene) {
+        for mut scene in &mut self.iter {
+            let mut child_scene = DynamicScene::default();
+            scene.dynamic_patch(&mut child_scene);
+            dynamic_scene.push_child(child_scene);
+        }
     }
 }

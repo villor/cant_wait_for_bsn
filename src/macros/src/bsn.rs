@@ -30,7 +30,7 @@ pub fn bsn(item: TokenStream) -> TokenStream {
 pub struct BsnEntity {
     pub inherits: Punctuated<BsnInherit, Token![,]>,
     pub patch: BsnPatch,
-    pub children: Punctuated<BsnEntity, Token![,]>,
+    pub children: Punctuated<BsnChildren, Token![,]>,
 }
 
 impl Parse for BsnEntity {
@@ -80,7 +80,7 @@ impl Parse for BsnEntity {
         let children = if input.peek(token::Bracket) {
             let content;
             bracketed![content in input];
-            content.parse_terminated(BsnEntity::parse, Token![,])?
+            content.parse_terminated(BsnChildren::parse, Token![,])?
         } else {
             Punctuated::new()
         };
@@ -110,6 +110,40 @@ impl ToTokens for BsnEntity {
             }
         }
         .to_tokens(tokens);
+    }
+}
+
+pub enum BsnChildren {
+    Entity(BsnEntity),
+    Spread(Expr),
+}
+
+impl Parse for BsnChildren {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(Token![.]) && input.peek2(Token![.]) {
+            // Parse as spread
+            input.parse::<Token![.]>()?;
+            input.parse::<Token![.]>()?;
+            Ok(BsnChildren::Spread(input.parse::<Expr>()?))
+        } else {
+            Ok(BsnChildren::Entity(input.parse::<BsnEntity>()?))
+        }
+    }
+}
+
+impl ToTokens for BsnChildren {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let cant_wait_for_bsn = syn::Path::from(Ident::new(
+            "cant_wait_for_bsn",
+            proc_macro2::Span::call_site(),
+        ));
+        match self {
+            BsnChildren::Entity(entity) => entity.to_tokens(tokens),
+            BsnChildren::Spread(expr) => quote! {
+                #cant_wait_for_bsn::SceneIter::new(#expr)
+            }
+            .to_tokens(tokens),
+        }
     }
 }
 
