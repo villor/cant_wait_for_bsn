@@ -1,14 +1,12 @@
 use core::any::TypeId;
 
 use bevy::{
-    prelude::{AppTypeRegistry, BuildChildren, Component, Mut, ReflectComponent},
+    prelude::{BuildChildren, Component},
     reflect::{PartialReflect, Reflect},
     utils::{all_tuples, TypeIdMap},
 };
 
-use crate::{
-    Construct, ConstructContext, ConstructError, ConstructPatch, Patch, 
-};
+use crate::{Construct, ConstructContext, ConstructError, ConstructPatch, PatchProps};
 
 /// Dynamic patch
 pub trait DynamicPatch: Send + Sync + 'static {
@@ -42,77 +40,70 @@ impl<C, F, P> DynamicPatch for ConstructPatch<C, F>
 where
     C: Construct<Props = P> + Component + PartialReflect + Sync + Send + 'static,
     P: Reflect + Default + Clone + Sync + Send + 'static,
-    F: FnMut(&mut C::Props) + Sync + Send + 'static,
+    F: Fn(&mut C::Props) + Clone + Sync + Send + 'static,
 {
     fn dynamic_patch(&mut self, scene: &mut DynamicScene) {
         let dynamic_props = scene
             .component_props
             .entry(TypeId::of::<C>())
             .or_insert_with(|| DynamicProps {
-                construct: Box::new(|context, props| {
-                    Ok(Box::new(C::construct(context, props.take().unwrap())?))
-                }),
-                props: Box::new(P::default()),
+                construct: &|context, dynamic_props| {
+                    // Kind of hacky to do this here, but it'll do for now
+                    let props = {
+                        let entity = context.world.entity_mut(context.id);
+                        let mut props = entity.get::<PatchProps<C>>().cloned().unwrap_or_default();
+
+                        for patch in dynamic_props.patches.iter() {
+                            (patch)(props.props.as_reflect_mut());
+                        }
+
+                        props.clone()
+                    };
+
+                    let component = context.construct::<C>(props.props)?;
+
+                    let mut entity = context.world.entity_mut(context.id);
+                    entity.insert(component);
+
+                    Ok(())
+                },
+                patches: Vec::new(),
             });
 
-        let p = dynamic_props.props.downcast_mut::<P>().unwrap();
-        self.patch(p);
+        let func = self.func.clone();
+
+        dynamic_props
+            .patches
+            .push(Box::new(move |props: &mut dyn Reflect| {
+                (func)(props.downcast_mut::<C::Props>().unwrap());
+            }));
     }
 }
 
-struct DynamicProps {
-    construct: Box<dyn Fn(&mut ConstructContext, Box<dyn Reflect>) -> Result<Box<dyn PartialReflect>, ConstructError>>,
-    props: Box<dyn Reflect>,
+struct DynamicProps<'a> {
+    patches: Vec<Box<dyn Fn(&mut dyn Reflect)>>,
+    construct: &'a dyn Fn(&mut ConstructContext, &DynamicProps<'a>) -> Result<(), ConstructError>,
 }
 
 /// A dynamic scene containing dynamic patches and children.
 #[derive(Default)]
-pub struct DynamicScene {
-    component_props: TypeIdMap<DynamicProps>,
-    children: Vec<DynamicScene>,
+pub struct DynamicScene<'a> {
+    component_props: TypeIdMap<DynamicProps<'a>>,
+    children: Vec<DynamicScene<'a>>,
 }
 
-impl DynamicScene {
+impl<'a> DynamicScene<'a> {
     /// Constructs the dynamic patches in the scene, inserts the resulting components, and spawns children recursively.
     pub fn construct(self, context: &mut ConstructContext) -> Result<(), ConstructError> {
-        let id = context.id;
-
-        // Insert components
-        context
-            .world
-            .resource_scope(|world, type_registry: Mut<AppTypeRegistry>| {
-                let type_registry = type_registry.read();
-
-                for (type_id, props) in self.component_props {
-                    let Some(type_registration) = type_registry.get(type_id) else {
-                        bevy::log::warn!("Component type `{:?}` not found in type registry during DynamicScene construction, skipped.", type_id);
-                        continue;
-                    };
-        
-                    let Some(reflect_component) = type_registration.data::<ReflectComponent>() else {
-                        bevy::log::warn!(
-                            "Component `{:?}` is not reflectable, skipped.",
-                            type_registration.type_info().type_path()
-                        );
-                        continue;
-                    };
-        
-                    let component = (props.construct)(&mut ConstructContext {
-                        id,
-                        world
-                    }, props.props)?;
-
-                    let mut entity = world.entity_mut(id);
-                    reflect_component.insert(&mut entity, component.as_ref(), &type_registry);
-                }
-
-                Ok(())
-            })?;
+        // Construct and hot patch components
+        for (_, props) in self.component_props {
+            (props.construct)(context, &props)?;
+        }
 
         // Spawn children
         for child in self.children {
             let child_id = context.world.spawn_empty().id();
-            context.world.entity_mut(id).add_child(child_id);
+            context.world.entity_mut(context.id).add_child(child_id);
             child.construct(&mut ConstructContext {
                 id: child_id,
                 world: context.world,
@@ -123,7 +114,7 @@ impl DynamicScene {
     }
 
     /// Add a child to the dynamic scene.
-    pub fn push_child(&mut self, child: DynamicScene) {
+    pub fn push_child(&mut self, child: DynamicScene<'a>) {
         self.children.push(child);
     }
 }

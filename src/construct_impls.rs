@@ -1,12 +1,16 @@
 use alloc::borrow::Cow;
 
-use bevy::prelude::*;
+use bevy::{
+    ecs::component::{ComponentHooks, StorageType},
+    prelude::*,
+    text::FontSmoothing,
+};
 
-use crate::{Construct, ConstructContext, ConstructError};
+use crate::{Construct, ConstructContext, ConstructError, ConstructProp};
 
 /// Constructable asset handle (because [`Handle<T>`] implements Default in Bevy right now)
-#[derive(Deref, DerefMut, Clone, Reflect)]
-pub struct ConstructHandle<T: Asset>(Handle<T>);
+#[derive(Deref, DerefMut, Clone, Reflect, Debug)]
+pub struct ConstructHandle<T: Asset>(pub Handle<T>);
 
 impl<T: Asset> From<Handle<T>> for ConstructHandle<T> {
     fn from(value: Handle<T>) -> Self {
@@ -38,7 +42,7 @@ impl<T: Asset> Construct for ConstructHandle<T> {
 }
 
 /// Entity reference constructable using [`EntityPath`], allowing passing either entity name or id as prop.
-#[derive(Deref, DerefMut, Clone, Reflect)]
+#[derive(Deref, DerefMut, Debug, Clone, Reflect)]
 pub struct ConstructEntity(Entity);
 
 impl From<Entity> for ConstructEntity {
@@ -54,7 +58,7 @@ impl From<ConstructEntity> for Entity {
 }
 
 /// The construct prop for [`ConstructEntity`].
-#[derive(Default, Clone, Reflect)]
+#[derive(Default, Debug, Clone, Reflect)]
 pub enum EntityPath {
     /// None
     #[default]
@@ -108,5 +112,74 @@ impl Construct for ConstructEntity {
                 message: "no entity supplied".into(),
             }),
         }
+    }
+}
+
+/// Constructable text font. Workaround for default-implmented [`TextFont`] in Bevy.
+#[derive(Clone, Debug, Reflect)]
+#[reflect(Component)]
+pub struct ConstructableTextFont {
+    /// Font
+    pub font: ConstructHandle<Font>,
+    /// Font size
+    pub font_size: f32,
+    /// Font smoothing
+    pub font_smoothing: FontSmoothing,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Reflect)]
+pub struct ConstructableTextFontProps {
+    pub font: ConstructProp<ConstructHandle<Font>>,
+    pub font_size: f32,
+    pub font_smoothing: FontSmoothing,
+}
+
+impl Default for ConstructableTextFontProps {
+    fn default() -> Self {
+        let TextFont {
+            font,
+            font_size,
+            font_smoothing,
+        } = TextFont::default();
+        Self {
+            font: ConstructProp::Value(font.into()),
+            font_size,
+            font_smoothing,
+        }
+    }
+}
+
+impl Construct for ConstructableTextFont {
+    type Props = ConstructableTextFontProps;
+    fn construct(
+        context: &mut ConstructContext,
+        props: Self::Props,
+    ) -> Result<Self, ConstructError> {
+        Ok(Self {
+            font: props.font.construct(context)?,
+            font_size: props.font_size,
+            font_smoothing: props.font_smoothing,
+        })
+    }
+}
+
+impl Component for ConstructableTextFont {
+    const STORAGE_TYPE: StorageType = StorageType::Table;
+
+    fn register_component_hooks(hooks: &mut ComponentHooks) {
+        hooks.on_insert(|mut world, entity, _component_id| {
+            let constructable = world.get::<ConstructableTextFont>(entity).unwrap().clone();
+            world.commands().entity(entity).insert(TextFont {
+                font: constructable.font.into(),
+                font_size: constructable.font_size,
+                font_smoothing: constructable.font_smoothing,
+            });
+        });
+        hooks.on_remove(|mut world, entity, _component_id| {
+            if let Some(mut entity) = world.commands().get_entity(entity) {
+                entity.remove::<TextFont>();
+            }
+        });
     }
 }

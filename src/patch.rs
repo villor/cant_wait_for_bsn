@@ -40,14 +40,14 @@ all_tuples!(
 
 /// Generic patch based on closure
 pub struct ConstructPatch<C: Construct, F> {
-    func: F,
-    _marker: PhantomData<C>,
+    pub(crate) func: F,
+    pub(crate) _marker: PhantomData<C>,
 }
 
 impl<C, F> ConstructPatch<C, F>
 where
     C: Construct<Props = C>,
-    F: FnMut(&mut C) + Sync + Send + 'static,
+    F: Fn(&mut C) + Clone + Sync + Send + 'static,
 {
     /// Allows inferring the type of a bsn expression.
     ///
@@ -60,7 +60,7 @@ where
     }
 }
 
-impl<C: Construct + Bundle, F: FnMut(&mut C::Props) + Sync + Send + 'static> Patch
+impl<C: Construct + Bundle, F: Fn(&mut C::Props) + Clone + Sync + Send + 'static> Patch
     for ConstructPatch<C, F>
 {
     type Construct = C;
@@ -75,7 +75,13 @@ pub trait ConstructPatchExt {
     type C: Construct;
 
     /// Returns a [`ConstructPatch`] wrapping the provided closure.
-    fn patch<F: FnMut(&mut <<Self as ConstructPatchExt>::C as Construct>::Props)>(
+    fn patch<
+        F: Fn(&mut <<Self as ConstructPatchExt>::C as Construct>::Props)
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    >(
         func: F,
     ) -> ConstructPatch<Self::C, F> {
         ConstructPatch {

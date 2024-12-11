@@ -89,7 +89,7 @@ fn impl_for_struct(
         if *is_construct {
             quote! { #ident #colon_token match props.#ident {
                 #cant_wait_for_bsn::ConstructProp::Prop(p) => {
-                    #cant_wait_for_bsn::Construct::construct(p, context)?
+                    #cant_wait_for_bsn::Construct::construct(context, p)?
                 },
                 #cant_wait_for_bsn::ConstructProp::Value(v) => v,
             } }
