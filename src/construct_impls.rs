@@ -6,7 +6,7 @@ use bevy::{
     text::FontSmoothing,
 };
 
-use crate::{Construct, ConstructContext, ConstructError, ConstructProp};
+use crate::{Construct, ConstructContext, ConstructError, ConstructProp, ReflectConstruct};
 
 /// Constructable asset handle (because [`Handle<T>`] implements Default in Bevy right now)
 #[derive(Deref, DerefMut, Clone, Reflect, Debug)]
@@ -117,7 +117,7 @@ impl Construct for ConstructEntity {
 
 /// Constructable text font. Workaround for default-implmented [`TextFont`] in Bevy.
 #[derive(Clone, Debug, Reflect)]
-#[reflect(Component)]
+#[reflect(Component, Construct)]
 pub struct ConstructableTextFont {
     /// Font
     pub font: ConstructHandle<Font>,

@@ -1531,6 +1531,8 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "cant_wait_for_bsn_macros",
+ "cant_wait_for_bsn_parse",
+ "downcast-rs",
  "thiserror 2.0.3",
 ]
 
@@ -1539,9 +1541,21 @@ name = "cant_wait_for_bsn_macros"
 version = "0.1.0"
 dependencies = [
  "bevy_macro_utils",
+ "cant_wait_for_bsn_parse",
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "cant_wait_for_bsn_parse"
+version = "0.1.0"
+dependencies = [
+ "bevy_math",
+ "bevy_utils",
+ "proc-macro2",
+ "syn",
+ "thiserror 2.0.3",
 ]
 
 [[package]]

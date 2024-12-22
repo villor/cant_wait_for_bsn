@@ -7,6 +7,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(CantWaitForBsnPlugin)
         .add_systems(Startup, |mut commands: Commands| {
             commands.spawn(Camera2d);
             commands.spawn_scene(ui());

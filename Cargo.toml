@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 bevy = { version = "0.15.0" }
 thiserror = { version = "2" }
+downcast-rs = { version = "1.2.1" }
 cant_wait_for_bsn_macros = { path = "src/macros", version = "0.1.0" }
+cant_wait_for_bsn_parse = { path = "src/parse", version = "0.1.0" }
 
 [dev-dependencies]
 bevy-inspector-egui = "0.28"

@@ -12,6 +12,7 @@ fn main() {
         .register_type::<HealthBar>()
         .add_plugins(DefaultPlugins)
         .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(CantWaitForBsnPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, game_health_update)
         .run();
@@ -184,7 +185,7 @@ impl Construct for HealthBar {
             ]
         };
 
-        context.construct_entity_patch(entity_patch)?;
+        context.construct_scene(entity_patch)?;
 
         Ok(Self { player_entity })
     }

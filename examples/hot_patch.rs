@@ -7,6 +7,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(CantWaitForBsnPlugin)
         .add_systems(Startup, |mut commands: Commands| {
             commands.spawn(Camera2d);
             commands.spawn_scene(ui());
@@ -70,13 +71,13 @@ fn update_button_background(
         match *interaction {
             Interaction::Pressed => commands
                 .entity(entity)
-                .construct_patch(bsn! { BackgroundColor(LIME_600) }),
+                .construct_scene(bsn! { BackgroundColor(LIME_600) }),
             Interaction::Hovered => commands
                 .entity(entity)
-                .construct_patch(bsn! { BackgroundColor(LIME_400) }),
+                .construct_scene(bsn! { BackgroundColor(LIME_400) }),
             Interaction::None => commands
                 .entity(entity)
-                .construct_patch(bsn! { BackgroundColor(LIME_500) }),
+                .construct_scene(bsn! { BackgroundColor(LIME_500) }),
         };
     }
 }
@@ -92,7 +93,7 @@ fn update_button_font(
             Interaction::Pressed => "fonts/Comic Sans.ttf",
             _ => "fonts/FiraSans-Bold.ttf",
         };
-        commands.entity(entity).construct_patch(bsn! {
+        commands.entity(entity).construct_scene(bsn! {
             ConstructableTextFont {
                 font: @font,
             }

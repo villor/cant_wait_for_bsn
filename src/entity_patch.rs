@@ -157,99 +157,24 @@ where
     }
 }
 
-/// Extension trait implementing [`EntityPatch`] utilities for [`ConstructContext`].
-pub trait ConstructContextEntityPatchExt {
-    /// Constructs an [`EntityPatch`], inserts the components to the context entity, and recursively spawns the descendants.
-    fn construct_entity_patch<I, P, C>(
-        &mut self,
-        entity_patch: EntityPatch<I, P, C>,
-    ) -> Result<&mut Self, ConstructError>
-    where
-        I: SceneTuple,
-        P: Patch + DynamicPatch + HotPatch,
-        C: SceneTuple;
+/// Extension trait implementing [`Scene`] utilities for [`ConstructContext`].
+pub trait ConstructContextSceneExt {
+    /// Constructs a [`Scene`], inserts the components to the context entity, and recursively spawns the descendants.
+    fn construct_scene(&mut self, scene: impl Scene) -> Result<&mut Self, ConstructError>;
 
-    /// Spawns an [`EntityPatch`] under the context entity recursively.
-    fn spawn_entity_patch<I, P, C>(
-        &mut self,
-        entity_patch: EntityPatch<I, P, C>,
-    ) -> Result<&mut Self, ConstructError>
-    where
-        I: SceneTuple,
-        P: Patch + DynamicPatch + HotPatch,
-        C: SceneTuple;
+    /// Spawns a [`Scene`] under the context entity recursively.
+    fn spawn_scene(&mut self, scene: impl Scene) -> Result<&mut Self, ConstructError>;
 }
 
-impl<'a> ConstructContextEntityPatchExt for ConstructContext<'a> {
-    fn construct_entity_patch<I, P, C>(
-        &mut self,
-        entity_patch: EntityPatch<I, P, C>,
-    ) -> Result<&mut Self, ConstructError>
-    where
-        I: SceneTuple,
-        P: Patch + DynamicPatch + HotPatch,
-        C: SceneTuple,
-    {
-        entity_patch.construct(self)?;
+impl<'a> ConstructContextSceneExt for ConstructContext<'a> {
+    fn construct_scene(&mut self, scene: impl Scene) -> Result<&mut Self, ConstructError> {
+        scene.construct(self)?;
         Ok(self)
     }
 
-    fn spawn_entity_patch<I, P, C>(
-        &mut self,
-        entity_patch: EntityPatch<I, P, C>,
-    ) -> Result<&mut Self, ConstructError>
-    where
-        I: SceneTuple,
-        P: Patch + DynamicPatch + HotPatch,
-        C: SceneTuple,
-    {
-        entity_patch.spawn(self)?;
+    fn spawn_scene(&mut self, scene: impl Scene) -> Result<&mut Self, ConstructError> {
+        scene.spawn(self)?;
         Ok(self)
-    }
-}
-
-/// Extension trait implementing [`EntityPatch`] utilities for [`EntityCommands`].
-pub trait EntityCommandsEntityPatchExt {
-    /// Constructs an [`EntityPatch`] and applies it to the entity.
-    fn construct_patch<I, P, C>(&mut self, entity_patch: EntityPatch<I, P, C>) -> EntityCommands
-    where
-        I: SceneTuple + Send + 'static,
-        P: Patch + DynamicPatch + HotPatch + Send + 'static,
-        C: SceneTuple + Send + 'static;
-}
-
-struct ConstructEntityPatchCommand<I, P, C>(EntityPatch<I, P, C>)
-where
-    I: SceneTuple + Send + 'static,
-    P: Patch + DynamicPatch + HotPatch + Send + 'static,
-    C: SceneTuple + Send + 'static;
-
-impl<I, P, C> EntityCommand for ConstructEntityPatchCommand<I, P, C>
-where
-    I: SceneTuple + Send + 'static,
-    P: Patch + DynamicPatch + HotPatch + Send + 'static,
-    C: SceneTuple + Send + 'static,
-{
-    fn apply(self, id: Entity, world: &mut World) {
-        let mut context = ConstructContext { id, world };
-        context
-            .construct_entity_patch(self.0)
-            .expect("failed to spawn_entity_patch in ConstructEntityPatchCommand");
-    }
-}
-
-impl<'w> EntityCommandsEntityPatchExt for EntityCommands<'w> {
-    // type Out = EntityCommands;
-    fn construct_patch<
-        I: SceneTuple + Send + 'static,
-        P: Patch + DynamicPatch + HotPatch + Send + 'static,
-        C: SceneTuple + Send + 'static,
-    >(
-        &mut self,
-        entity_patch: EntityPatch<I, P, C>,
-    ) -> EntityCommands {
-        self.queue(ConstructEntityPatchCommand(entity_patch));
-        self.reborrow()
     }
 }
 
@@ -266,6 +191,20 @@ where
         self.0
             .construct(&mut context)
             .expect("failed to spawn_scene in ConstructSceneCommand");
+    }
+}
+
+/// Extension trait implementing [`Scene`] utilities for [`EntityCommands`].
+pub trait EntityCommandsSceneExt {
+    /// Constructs a [`Scene`] and applies it to the entity.
+    fn construct_scene(&mut self, scene: impl Scene + Send + 'static) -> EntityCommands;
+}
+
+impl<'w> EntityCommandsSceneExt for EntityCommands<'w> {
+    // type Out = EntityCommands;
+    fn construct_scene(&mut self, scene: impl Scene + Send + 'static) -> EntityCommands {
+        self.queue(ConstructSceneCommand(scene));
+        self.reborrow()
     }
 }
 
